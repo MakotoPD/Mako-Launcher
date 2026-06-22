@@ -135,7 +135,7 @@
       <!-- tab content -->
       <div>
         <!-- logs: saved logs (latest.log, *.log.gz, crash-reports) -->
-        <InstanceLogs v-if="activeTab === 'logs'" :instance-id="id" />
+        <InstanceLogs v-if="activeTab === 'logs'" :instance-id="id" :initial-rel="initialCrashRel" />
 
         <!-- auto-detected content sections -->
         <InstanceContent v-else-if="isContentTab" :instance-id="id" :tab="activeTab as ContentTab" />
@@ -296,6 +296,21 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
 ]
 const activeTab = ref<TabKey>('mods')
 const activeTabMeta = computed(() => tabs.find(t => t.key === activeTab.value) ?? tabs[0]!)
+
+// Deep-link from the crash modal: ?tab=logs&crashRel=crash-reports%2F...
+const initialCrashRel = ref<string | null>(null)
+onMounted(() => {
+  const tabParam = route.query.tab as string | undefined
+  if (tabParam && tabs.some(t => t.key === tabParam)) {
+    activeTab.value = tabParam as TabKey
+  }
+  const crashRelParam = route.query.crashRel as string | undefined
+  if (crashRelParam) {
+    initialCrashRel.value = decodeURIComponent(crashRelParam)
+    // Clean the URL without navigation so refreshing doesn't re-trigger.
+    router.replace({ query: {} })
+  }
+})
 
 // Tabs whose content is read from disk by <InstanceContent>.
 type ContentTab = 'screenshots' | 'worlds' | 'resourcepacks' | 'datapacks' | 'shaders' | 'servers'

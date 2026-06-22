@@ -148,6 +148,16 @@
     "shared": "Log uploaded to mclo.gs (link copied)",
     "openLink": "Open"
   },
+  "crash": {
+    "title": "Minecraft crashed",
+    "subtitle": "{name} exited unexpectedly (code {code})",
+    "subtitleNoCode": "{name} exited unexpectedly",
+    "noReport": "No crash report was generated.",
+    "loadError": "Could not load crash report.",
+    "share": "Share on mclo.gs",
+    "openLogs": "View in Logs",
+    "dismiss": "Dismiss"
+  },
   "export": {
     "title": "Export {name}",
     "format": "Format",

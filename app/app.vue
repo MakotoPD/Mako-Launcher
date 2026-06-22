@@ -31,6 +31,7 @@
     </div>
 
     <LiveLogsModal />
+    <CrashReportModal />
   </UApp>
 </template>
 

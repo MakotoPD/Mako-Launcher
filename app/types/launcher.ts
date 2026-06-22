@@ -111,6 +111,12 @@ export interface MultiProgress { instance_id: string; current: number; total: nu
 export interface FileProgress { instance_id: string; path: string; current: number; total: number }
 export interface ConsoleLine { instance_id: string; line: string }
 export interface ExitInfo { instance_id: string; code: number | null }
+export interface CrashInfo {
+  instance_id: string
+  code: number | null
+  /** Relative path from the game dir, e.g. "crash-reports/crash-2026-06-22_13.21.01-client.txt" */
+  crash_report_rel: string | null
+}
 
 // Instance content (instance page tabs), mirrors src-tauri/src/commands/content.rs.
 export interface ScreenshotInfo { name: string; path: string; modified: number }

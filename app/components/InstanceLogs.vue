@@ -56,7 +56,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open as openUrl } from '@tauri-apps/plugin-shell'
 import type { LogFile } from '~/types/launcher'
 
-const props = defineProps<{ instanceId: string }>()
+const props = defineProps<{ instanceId: string; initialRel?: string | null }>()
 const toast = useToast()
 const { t } = useI18n()
 const uploading = ref(false)
@@ -74,9 +74,13 @@ async function load() {
   loading.value = true
   try {
     files.value = await invoke<LogFile[]>('list_log_files', { id: props.instanceId })
-    if (files.value.length && (!selected.value || !files.value.some(f => f.rel === selected.value))) {
-      open(files.value[0]!.rel)
-    }
+    // If an initial file was requested (e.g. from the crash modal), open it;
+    // otherwise fall back to the first file in the list.
+    const wantRel = props.initialRel || null
+    const target = wantRel && files.value.some(f => f.rel === wantRel)
+      ? wantRel
+      : files.value[0]?.rel ?? null
+    if (target && target !== selected.value) open(target)
   } catch (e) {
     toast.add({ title: String(e), color: 'error' })
   } finally {

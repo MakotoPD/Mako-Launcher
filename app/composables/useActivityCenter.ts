@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import type { MultiProgress, ConsoleLine, ExitInfo } from '~/types/launcher'
+import type { MultiProgress, ConsoleLine, ExitInfo, CrashInfo } from '~/types/launcher'
 
 /** A single thing happening for an instance, surfaced in the titlebar. */
 export interface Activity {
@@ -30,6 +30,8 @@ export const useActivityCenter = () => {
   const activities = useState<Record<string, Activity>>('mc-activities', () => ({}))
   // Console output is kept per instance so each instance page shows only its own.
   const logs = useState<Record<string, string[]>>('mc-logs', () => ({}))
+  // Crash info per instance — set when mc://crashed fires, cleared on dismiss.
+  const crashes = useState<Record<string, CrashInfo>>('mc-crashes', () => ({}))
   // Ad-hoc frontend-driven operations (mod/modpack install/update, …) → label.
   const tasks = useState<Record<string, string>>('mc-tasks', () => ({}))
 
@@ -88,6 +90,13 @@ export const useActivityCenter = () => {
           await listen<ExitInfo>('mc://exited', (e) => {
             clear(e.payload.instance_id)
           }),
+          await listen<CrashInfo>('mc://crashed', (e) => {
+            const iid = e.payload.instance_id
+            crashes.value = { ...crashes.value, [iid]: e.payload }
+            // Auto-open the crash modal for the crashed instance.
+            crashInstance.value = iid
+            crashOpen.value = true
+          }),
         )
       })()
     }
@@ -134,5 +143,16 @@ export const useActivityCenter = () => {
     liveLogsOpen.value = true
   }
 
-  return { activities, logs, tasks, taskLabels, startTask, endTask, withTask, attach, detach, list, top, activityFor, logsFor, clear, clearLog, markRunning, liveLogsOpen, liveLogsInstance, openLiveLogs }
+  // Crash report modal — opened automatically on mc://crashed.
+  const crashOpen = useState('mc-crash-open', () => false)
+  const crashInstance = useState<string | null>('mc-crash-instance', () => null)
+  const crashFor = (id: string) => computed(() => crashes.value[id] ?? null)
+  const clearCrash = (id: string) => {
+    if (!crashes.value[id]) return
+    const next = { ...crashes.value }
+    delete next[id]
+    crashes.value = next
+  }
+
+  return { activities, logs, tasks, taskLabels, startTask, endTask, withTask, attach, detach, list, top, activityFor, logsFor, clear, clearLog, markRunning, liveLogsOpen, liveLogsInstance, openLiveLogs, crashOpen, crashInstance, crashFor, clearCrash }
 }

@@ -53,6 +53,15 @@ struct ExitInfo {
     code: Option<i32>,
 }
 
+/// Emitted when the game exits with a non-zero code and a crash report is found.
+#[derive(Clone, Serialize)]
+struct CrashInfo {
+    instance_id: String,
+    code: Option<i32>,
+    /// Relative path from the game dir (e.g. "crash-reports/crash-2026-06-22_13.21.01-client.txt").
+    crash_report_rel: Option<String>,
+}
+
 fn to_lyceris_loader(loader: &Loader) -> Option<Box<dyn LyLoader>> {
     match loader {
         Loader::Vanilla => None,
@@ -292,6 +301,7 @@ async fn launch_inner(app: &AppHandle, id: &str) -> Result<(), String> {
     // stays alive for the whole session, and clear the running flag at the end.
     let app_bg = app.clone();
     let id_bg = id.to_string();
+    let game_start = std::time::SystemTime::now();
     tauri::async_runtime::spawn(async move {
         let _keep_emitter = emitter;
         let code = match child.wait().await {
@@ -319,6 +329,21 @@ async fn launch_inner(app: &AppHandle, id: &str) -> Result<(), String> {
         // Post-exit hook (fire-and-forget).
         if let Some(cmd) = post_exit.as_deref().filter(|s| !s.trim().is_empty()) {
             run_hook(cmd, false);
+        }
+
+        // Crash detection: non-zero exit code → look for a crash report created
+        // after the game started. If found, emit mc://crashed instead of mc://exited.
+        let is_crash = code.map(|c| c != 0).unwrap_or(false);
+        if is_crash {
+            let crash_rel = find_latest_crash_report(&id_bg, game_start);
+            let _ = app_bg.emit(
+                "mc://crashed",
+                CrashInfo {
+                    instance_id: id_bg.clone(),
+                    code,
+                    crash_report_rel: crash_rel,
+                },
+            );
         }
         let _ = app_bg.emit(
             "mc://exited",
@@ -411,6 +436,36 @@ pub fn stop_instance(state: State<'_, AppState>, id: String, force: bool) -> Res
         remove_lock(&id);
     }
     Ok(())
+}
+
+// ---------- crash report detection ----------
+
+/// Scans `crash-reports/` for the newest `.txt` or `.log` file that was
+/// modified *after* `since`. Returns a relative path like
+/// `"crash-reports/crash-2026-06-22_13.21.01-client.txt"`, or `None`.
+fn find_latest_crash_report(id: &str, since: std::time::SystemTime) -> Option<String> {
+    let dir = paths::instance_game_dir(id).join("crash-reports");
+    let entries = std::fs::read_dir(&dir).ok()?;
+    let mut best: Option<(std::time::SystemTime, String)> = None;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if ext != "txt" && ext != "log" {
+            continue;
+        }
+        let modified = entry.metadata().ok()?.modified().ok()?;
+        if modified < since {
+            continue; // older than game start — not caused by this session
+        }
+        if best.as_ref().map(|(t, _)| modified > *t).unwrap_or(true) {
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            best = Some((modified, format!("crash-reports/{name}")));
+        }
+    }
+    best.map(|(_, rel)| rel)
 }
 
 // ---------- run locks (cross-restart double-launch protection) ----------

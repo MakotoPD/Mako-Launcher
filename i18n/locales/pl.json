@@ -148,6 +148,17 @@
     "shared": "Log wysłany na mclo.gs (link skopiowany)",
     "openLink": "Otwórz"
   },
+  "crash": {
+    "title": "Minecraft się wywalił",
+    "subtitle": "{name} zakończył się niespodziewanie (kod {code})",
+    "subtitleNoCode": "{name} zakończył się niespodziewanie",
+    "noReport": "Nie wygenerowano raportu o awarii.",
+    "loadError": "Nie udało się wczytać raportu o awarii.",
+    "share": "Udostępnij na mclo.gs",
+    "openLogs": "Otwórz w Logach",
+    "dismiss": "Zamknij"
+  },
+
   "export": {
     "title": "Eksport: {name}",
     "format": "Format",
