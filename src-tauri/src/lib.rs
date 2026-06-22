@@ -125,8 +125,9 @@ pub fn run() {
             // Import / export
             commands::import::detect_external_instances,
             commands::import::import_external_instance,
-            commands::import::list_instance_entries,
+            commands::import::list_dir,
             commands::import::export_instance,
+            commands::import::write_text_file,
             // Mod management
             commands::mods::list_mods,
             commands::mods::set_mod_enabled,

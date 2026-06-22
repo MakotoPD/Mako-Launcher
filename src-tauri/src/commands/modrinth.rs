@@ -724,33 +724,33 @@ struct MrpackEnv {
 /// Exports an instance as a Modrinth `.mrpack`, ready to upload to Modrinth or
 /// open in any compatible launcher. Mods/resource packs/shaders that resolve to
 /// Modrinth (by sha1) go into the manifest's `files` with their CDN download URL;
-/// everything else among the selected entries is bundled under `overrides/`.
-/// `include` is the set of top-level game-dir entries the user chose to export.
+/// everything else is bundled under `overrides/`. `exclude` is the set of paths
+/// the user unchecked in the file tree. When `optional_disabled` is set, disabled
+/// (`.disabled`) mods are exported as optional files (enabled in the pack name).
 #[tauri::command]
 pub async fn export_mrpack(
     id: String,
     dest: String,
     version: Option<String>,
     summary: Option<String>,
-    include: Vec<String>,
+    exclude: Vec<String>,
+    optional_disabled: bool,
 ) -> Result<(), String> {
     use sha1::{Digest, Sha1};
 
     let instance: Instance =
         store::read_json(&paths::instance_config_file(&id))?.ok_or("instance not found")?;
     let game_dir = paths::instance_game_dir(&id);
-    let include: std::collections::HashSet<String> = include.into_iter().collect();
+    let excluded: std::collections::HashSet<String> = exclude.into_iter().collect();
 
-    // Hash candidate downloadable content from the selected content folders.
+    // Hash candidate downloadable content from the content folders.
     struct Cand {
         rel: String,
         sha1: String,
+        disabled: bool,
     }
     let mut cands: Vec<Cand> = Vec::new();
     for sub in ["mods", "resourcepacks", "shaderpacks"] {
-        if !include.contains(sub) {
-            continue;
-        }
         let Ok(entries) = std::fs::read_dir(game_dir.join(sub)) else { continue };
         for e in entries.flatten() {
             let path = e.path();
@@ -758,13 +758,18 @@ pub async fn export_mrpack(
                 continue;
             }
             let name = e.file_name().to_string_lossy().into_owned();
-            if name.ends_with(".disabled") {
+            let disabled = name.ends_with(".disabled");
+            if disabled && !optional_disabled {
+                continue;
+            }
+            let rel = format!("{sub}/{name}");
+            if crate::commands::import::is_excluded(&rel, &excluded) {
                 continue;
             }
             let Ok(bytes) = std::fs::read(&path) else { continue };
             let mut h = Sha1::new();
             h.update(&bytes);
-            cands.push(Cand { rel: format!("{sub}/{name}"), sha1: format!("{:x}", h.finalize()) });
+            cands.push(Cand { rel, sha1: format!("{:x}", h.finalize()), disabled });
         }
     }
 
@@ -790,13 +795,21 @@ pub async fn export_mrpack(
                 if !file.url.starts_with("https://cdn.modrinth.com/") {
                     continue;
                 }
-                let env = if c.rel.starts_with("resourcepacks/") || c.rel.starts_with("shaderpacks/") {
+                // Disabled mods become optional and lose the `.disabled` suffix.
+                let path_out = if c.disabled {
+                    c.rel.strip_suffix(".disabled").unwrap_or(&c.rel).to_string()
+                } else {
+                    c.rel.clone()
+                };
+                let env = if c.disabled {
+                    Some(MrpackEnv { client: "optional".into(), server: "optional".into() })
+                } else if c.rel.starts_with("resourcepacks/") || c.rel.starts_with("shaderpacks/") {
                     Some(MrpackEnv { client: "required".into(), server: "unsupported".into() })
                 } else {
                     None
                 };
                 files.push(MrpackFile {
-                    path: c.rel.clone(),
+                    path: path_out,
                     hashes: MrpackHashes { sha1, sha512 },
                     env,
                     downloads: vec![file.url.clone()],
@@ -835,41 +848,51 @@ pub async fn export_mrpack(
     zip.start_file("modrinth.index.json", opts).map_err(|e| e.to_string())?;
     zip.write_all(&json).map_err(|e| e.to_string())?;
 
-    // Bundle the selected entries (minus files already in the manifest) as overrides.
-    for name in &include {
-        if game_dir.join(name).exists() {
-            add_overrides(&mut zip, &game_dir, name, opts, &matched)?;
-        }
-    }
+    // Everything not in the manifest (and not excluded) → overrides.
+    add_overrides(&mut zip, &game_dir, "", &excluded, &matched, optional_disabled, opts)?;
 
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Recursively adds `rel` (file or dir, relative to the game dir) under
-/// `overrides/`, skipping disabled mods and anything already in the manifest.
+/// Recursively walks the game dir, adding files under `overrides/` while honoring
+/// the exclude set and skipping regenerable folders, junk, manifest files, and
+/// (unless `optional_disabled`) disabled mods.
 fn add_overrides(
     zip: &mut zip::ZipWriter<std::fs::File>,
     base: &Path,
     rel: &str,
-    opts: zip::write::SimpleFileOptions,
+    excluded: &std::collections::HashSet<String>,
     matched: &std::collections::HashSet<String>,
+    optional_disabled: bool,
+    opts: zip::write::SimpleFileOptions,
 ) -> Result<(), String> {
-    let path = base.join(rel);
-    if path.is_dir() {
-        let Ok(entries) = std::fs::read_dir(&path) else { return Ok(()) };
-        for e in entries.flatten() {
-            let child = format!("{rel}/{}", e.file_name().to_string_lossy());
-            add_overrides(zip, base, &child, opts, matched)?;
+    let dir = if rel.is_empty() { base.to_path_buf() } else { base.join(rel) };
+    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(()) };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if rel.is_empty() && crate::commands::import::is_never_top(&name) {
+            continue;
         }
-        return Ok(());
+        let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
+        if crate::commands::import::is_excluded(&child_rel, excluded) {
+            continue;
+        }
+        let path = e.path();
+        if path.is_dir() {
+            add_overrides(zip, base, &child_rel, excluded, matched, optional_disabled, opts)?;
+            continue;
+        }
+        if matched.contains(&child_rel) || is_junk(&child_rel) {
+            continue;
+        }
+        if child_rel.ends_with(".disabled") && !optional_disabled {
+            continue;
+        }
+        let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+        zip.start_file(format!("overrides/{child_rel}"), opts).map_err(|e| e.to_string())?;
+        zip.write_all(&bytes).map_err(|e| e.to_string())?;
     }
-    if rel.ends_with(".disabled") || matched.contains(rel) || is_junk(rel) {
-        return Ok(());
-    }
-    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-    zip.start_file(format!("overrides/{rel}"), opts).map_err(|e| e.to_string())?;
-    zip.write_all(&bytes).map_err(|e| e.to_string())?;
     Ok(())
 }
 

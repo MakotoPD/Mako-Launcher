@@ -162,8 +162,22 @@
     "none": "Nic",
     "empty": "Nie ma czego wyeksportować.",
     "mrpackHint": "Mody/resourcepacki/shadery znalezione na Modrinth są linkowane; reszta trafia do overrides.",
+    "optionalDisabled": "Eksportuj wyłączone mody jako opcjonalne",
+    "optionalDisabledDesc": "Dołącz mody .disabled do paczki oznaczone jako opcjonalne.",
     "exportBtn": "Eksportuj",
     "done": "Instancja wyeksportowana"
+  },
+  "modlist": {
+    "title": "Eksport listy modów",
+    "export": "Eksportuj listę",
+    "version": "Wersja",
+    "url": "URL",
+    "filename": "Nazwa pliku",
+    "plain": "Zwykły tekst",
+    "custom": "Własny",
+    "count": "{n} modów",
+    "save": "Zapisz",
+    "saved": "Lista modów zapisana"
   },
   "settings": {
     "title": "Ustawienia",

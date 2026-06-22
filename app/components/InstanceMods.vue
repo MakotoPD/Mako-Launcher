@@ -32,6 +32,15 @@
       />
       <UButton icon="i-lucide-package-search" size="sm" :label="$t('modrinth.add')" @click="openBrowser" />
       <UButton
+        v-if="mods.length"
+        icon="i-lucide-file-text"
+        color="neutral"
+        variant="soft"
+        size="sm"
+        :label="$t('modlist.export')"
+        @click="modList.open(props.instanceId)"
+      />
+      <UButton
         icon="i-lucide-refresh-cw"
         color="neutral"
         variant="ghost"
@@ -225,6 +234,7 @@ const props = defineProps<{ instanceId: string }>()
 const toast = useToast()
 const { t } = useI18n()
 const browser = useModrinthBrowser()
+const modList = useModListModal()
 const instances = useInstancesStore()
 const modrinth = useModrinth()
 const activity = useActivityCenter()

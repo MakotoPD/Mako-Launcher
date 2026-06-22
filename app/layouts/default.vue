@@ -45,6 +45,7 @@
     <CreateInstanceModal />
     <ModrinthBrowser />
     <ExportInstanceModal />
+    <ExportModListModal />
 	</div>
 </template>
 

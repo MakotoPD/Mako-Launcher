@@ -162,8 +162,22 @@
     "none": "None",
     "empty": "Nothing to export.",
     "mrpackHint": "Mods/resource packs/shaders found on Modrinth are linked; everything else is bundled as overrides.",
+    "optionalDisabled": "Export disabled mods as optional",
+    "optionalDisabledDesc": "Include .disabled mods in the pack marked as optional.",
     "exportBtn": "Export",
     "done": "Instance exported"
+  },
+  "modlist": {
+    "title": "Export mod list",
+    "export": "Export list",
+    "version": "Version",
+    "url": "URL",
+    "filename": "File name",
+    "plain": "Plain text",
+    "custom": "Custom",
+    "count": "{n} mods",
+    "save": "Save",
+    "saved": "Mod list saved"
   },
   "settings": {
     "title": "Settings",
