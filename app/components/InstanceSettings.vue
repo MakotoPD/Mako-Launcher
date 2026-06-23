@@ -24,6 +24,15 @@
         </UFormField>
 
         <div>
+          <p class="mb-1.5 text-sm font-medium">{{ $t('changeLoader.menu') }}</p>
+          <div class="flex items-center gap-2">
+            <span class="rounded-md bg-white/7 px-2.5 py-1 text-sm font-medium">{{ loaderLabel(form.loader.type) }}<span v-if="'version' in form.loader" class="ml-1 font-mono text-xs opacity-70">{{ form.loader.version }}</span></span>
+            <UButton icon="i-lucide-layers" color="neutral" variant="soft" size="sm" :label="$t('changeLoader.change')" @click="changeLoaderModal.open(props.instanceId)" />
+          </div>
+          <p class="mt-1.5 text-xs text-muted">{{ $t('changeLoader.settingsHint') }}</p>
+        </div>
+
+        <div>
           <p class="mb-1.5 text-sm font-medium">{{ $t('instSettings.duplicate') }}</p>
           <UButton icon="i-lucide-copy" color="neutral" variant="soft" :loading="busy" :label="$t('instSettings.duplicate')" @click="duplicate" />
           <p class="mt-1.5 text-xs text-muted">{{ $t('instSettings.duplicateHint') }}</p>
@@ -172,6 +181,7 @@ import type { Instance } from '~/types/launcher'
 
 const props = defineProps<{ instanceId: string }>()
 const instances = useInstancesStore()
+const changeLoaderModal = useChangeLoaderModal()
 const router = useRouter()
 const toast = useToast()
 const sysMem = useSystemMemory()

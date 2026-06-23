@@ -57,6 +57,14 @@ export const useModrinth = () => {
   const matchFile = (instanceId: string, filename: string) =>
     invoke<boolean>('modrinth_match_file', { instanceId, filename })
 
+  /** Updates all Modrinth mods in one bulk request; returns how many changed. */
+  const updateAll = (instanceId: string, loaders?: string[], gameVersions?: string[]) =>
+    invoke<number>('update_all_mods', {
+      instanceId,
+      loaders: loaders ?? null,
+      gameVersions: gameVersions ?? null,
+    })
+
   /** Installed mods that have a newer compatible version available. */
   const checkUpdates = (instanceId: string, loaders?: string[], gameVersions?: string[]) =>
     invoke<ModUpdate[]>('check_mod_updates', {
@@ -89,5 +97,5 @@ export const useModrinth = () => {
   const updateModpack = (instanceId: string) =>
     invoke<void>('update_modpack', { instanceId })
 
-  return { search, versions, project, categories, installWithDeps, getInstalled, matchLocal, matchFile, checkUpdates, installModpack, checkModpackUpdate, updateModpack }
+  return { search, versions, project, categories, installWithDeps, getInstalled, matchLocal, matchFile, checkUpdates, updateAll, installModpack, checkModpackUpdate, updateModpack }
 }

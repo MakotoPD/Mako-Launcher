@@ -65,6 +65,14 @@ export const useCurseforge = () => {
   const getBlocked = (instanceId: string) =>
     invoke<BlockedMod[]>('get_blocked_mods', { instanceId })
 
+  /** Updates all CurseForge mods in two bulk requests; returns how many changed. */
+  const updateAll = (instanceId: string, loaders?: string[], gameVersions?: string[]) =>
+    invoke<number>('curseforge_update_all', {
+      instanceId,
+      loaders: loaders ?? null,
+      gameVersions: gameVersions ?? null,
+    })
+
   /** Creates a new instance from a CurseForge modpack (by project + file id). */
   const installModpack = (projectId: string, fileId: string, nameOverride?: string | null) =>
     invoke<Instance>('curseforge_install_modpack', {
@@ -73,5 +81,5 @@ export const useCurseforge = () => {
       nameOverride: nameOverride ?? null,
     })
 
-  return { enabled, search, versions, project, categories, installWithDeps, matchLocal, matchFile, getBlocked, installModpack }
+  return { enabled, search, versions, project, categories, installWithDeps, matchLocal, matchFile, getBlocked, updateAll, installModpack }
 }

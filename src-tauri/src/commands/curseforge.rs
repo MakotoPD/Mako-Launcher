@@ -131,9 +131,16 @@ struct CfLinks {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CfFileIndex {
     #[serde(default)]
     game_version: String,
+    #[serde(default)]
+    file_id: i64,
+    #[serde(default)]
+    filename: String,
+    #[serde(default)]
+    mod_loader: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -174,20 +181,20 @@ struct CfScreenshot {
     description: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct CfHashEntry {
     value: String,
     algo: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CfDependency {
     mod_id: i64,
     relation_type: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CfFile {
     id: i64,
@@ -794,28 +801,119 @@ async fn resolve_latest_file(
     Ok(parsed.data.into_iter().next().map(|f| f.id.to_string()))
 }
 
-/// Latest file `(id, display_name)` for a project matching loader/game version,
-/// used for update checks. CF returns files newest-first. None if nothing found.
-pub async fn latest_file(
-    project_id: &str,
+/// Newest file `(file_id, filename)` per project matching loader/game version,
+/// resolved in ONE bulk `POST /mods` request (avoids per-mod requests / 429s).
+/// Returns a map keyed by project_id (as string).
+pub async fn bulk_latest_files(
+    project_ids: &[String],
     loaders: &Option<Vec<String>>,
     game_versions: &Option<Vec<String>>,
-) -> Option<(String, String)> {
-    let mut query: Vec<(String, String)> = vec![("pageSize".into(), "50".into())];
-    if let Some(g) = game_versions.as_ref().and_then(|v| v.first()) {
-        query.push(("gameVersion".into(), g.clone()));
+) -> HashMap<String, (String, String)> {
+    let ids: Vec<i64> = project_ids.iter().filter_map(|s| s.parse().ok()).collect();
+    let mods = bulk_mods(&ids).await.unwrap_or_default();
+    let want_loader = loaders.as_ref().and_then(|l| l.iter().find_map(|x| loader_id(x))).map(|l| l as i64);
+    let want_gv = game_versions.as_ref().and_then(|g| g.first().cloned());
+
+    let mut out = HashMap::new();
+    for (id, m) in mods {
+        let best = m
+            .latest_files_indexes
+            .iter()
+            .filter(|i| {
+                want_gv.as_ref().map(|gv| &i.game_version == gv).unwrap_or(true)
+                    && want_loader.map(|l| i.mod_loader == Some(l)).unwrap_or(true)
+            })
+            .max_by_key(|i| i.file_id);
+        if let Some(b) = best {
+            out.insert(id.to_string(), (b.file_id.to_string(), b.filename.clone()));
+        }
     }
-    if let Some(id) = loaders.as_ref().and_then(|l| l.iter().find_map(|x| loader_id(x))) {
-        query.push(("modLoaderType".into(), id.to_string()));
+    out
+}
+
+/// Updates every CurseForge mod at once: one bulk lookup for newest files, one
+/// bulk lookup for their download URLs, then concurrent downloads. Returns count.
+#[tauri::command]
+pub async fn curseforge_update_all(
+    instance_id: String,
+    loaders: Option<Vec<String>>,
+    game_versions: Option<Vec<String>>,
+) -> Result<usize, String> {
+    let mut index = read_content_index(&instance_id);
+    let cf: Vec<(usize, String, String)> = index
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| i.kind == "mod" && i.provider == "curseforge")
+        .map(|(pos, i)| (pos, i.project_id.clone(), i.version_id.clone()))
+        .collect();
+    if cf.is_empty() {
+        return Ok(0);
     }
-    let resp = send(http().get(format!("{API}/mods/{project_id}/files")).query(&query)).await.ok()?;
-    if !resp.status().is_success() {
-        return None;
+
+    let pids: Vec<String> = cf.iter().map(|(_, p, _)| p.clone()).collect();
+    let latest = bulk_latest_files(&pids, &loaders, &game_versions).await;
+
+    // Mods with a newer file id.
+    let mut need: Vec<(usize, i64)> = Vec::new();
+    for (pos, pid, vid) in &cf {
+        if let Some((new_id, _)) = latest.get(pid) {
+            if new_id != vid {
+                if let Ok(fid) = new_id.parse::<i64>() {
+                    need.push((*pos, fid));
+                }
+            }
+        }
     }
-    let parsed: CfListResponse<CfFile> = resp.json().await.ok()?;
-    let f = parsed.data.into_iter().next()?;
-    let num = if f.display_name.is_empty() { f.file_name } else { f.display_name };
-    Some((f.id.to_string(), num))
+    if need.is_empty() {
+        return Ok(0);
+    }
+
+    // Bulk-resolve download URLs.
+    let file_ids: Vec<i64> = need.iter().map(|(_, f)| *f).collect();
+    let files = bulk_files(&file_ids).await.unwrap_or_default();
+
+    let mods_dir = paths::instance_game_dir(&instance_id).join("mods");
+    std::fs::create_dir_all(&mods_dir).map_err(|e| e.to_string())?;
+
+    let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(8));
+    let mut set = tokio::task::JoinSet::new();
+    for (pos, fid) in need {
+        let Some(file) = files.get(&fid).cloned() else { continue };
+        let url = match &file.download_url {
+            Some(u) if !u.is_empty() => u.clone(),
+            _ => continue, // blocked → leave the old file in place
+        };
+        let mods_dir = mods_dir.clone();
+        let sem = sem.clone();
+        set.spawn(async move {
+            let _permit = sem.acquire_owned().await.ok()?;
+            let bytes = download(&url).await.ok()?;
+            std::fs::write(mods_dir.join(safe_name(&file.file_name)), &bytes).ok()?;
+            Some((pos, file))
+        });
+    }
+
+    let mut updated = 0usize;
+    while let Some(res) = set.join_next().await {
+        let Ok(Some((pos, file))) = res else { continue };
+        let item = &mut index.items[pos];
+        let old = item.filename.clone();
+        let new_name = safe_name(&file.file_name);
+        if old != new_name {
+            let _ = std::fs::remove_file(mods_dir.join(&old));
+            let _ = std::fs::remove_file(mods_dir.join(format!("{old}.disabled")));
+        }
+        let (gv, loaders_v) = split_game_versions(&file.game_versions);
+        item.version_id = file.id.to_string();
+        item.version_number = if file.display_name.is_empty() { file.file_name.clone() } else { file.display_name.clone() };
+        item.filename = new_name;
+        item.game_versions = gv;
+        item.loaders = loaders_v;
+        updated += 1;
+    }
+    write_content_index(&instance_id, &index)?;
+    Ok(updated)
 }
 
 fn kind_and_folder(m: &CfMod) -> (&'static str, &'static str) {

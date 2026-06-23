@@ -14,7 +14,9 @@ export async function resolveInstanceIcon(id: string, hasIcon: boolean): Promise
   if (cached) return cached
   const path = await invoke<string | null>('get_instance_icon_path', { id })
   if (!path) return null
-  const url = convertFileSrc(path)
+  // Cache-bust so a changed icon.png (same path) reloads instead of showing the
+  // browser-cached image. The URL is then memoized until invalidated.
+  const url = `${convertFileSrc(path)}?t=${Date.now()}`
   cache.set(id, url)
   return url
 }

@@ -13,6 +13,7 @@ import type { QuickPlay } from '~/types/launcher'
  */
 export const useMinecraftLaunch = (instanceId?: MaybeRefOrGetter<string | undefined>) => {
   const ac = useActivityCenter()
+  const instances = useInstancesStore()
 
   // Per-instance state, keyed by id, so concurrent instances don't bleed into
   // each other's UI.
@@ -46,9 +47,15 @@ export const useMinecraftLaunch = (instanceId?: MaybeRefOrGetter<string | undefi
     errors.value = { ...errors.value, [launchId]: null }
     ac.clearLog(launchId)
     launchingIds.value = { ...launchingIds.value, [launchId]: true }
+    // Optimistically stamp "last played" so the library updates instantly
+    // (the backend persists it at launch; we sync from disk afterwards).
+    const inst = instances.instances.find(i => i.id === launchId)
+    if (inst) inst.last_played = new Date().toISOString()
     await ac.attach()
     try {
       await invoke('launch_instance', { id: launchId, quickPlay: quickPlay ?? null })
+      // Sync playtime / last_played from disk once the game has started.
+      instances.load()
     } catch (e) {
       errors.value = { ...errors.value, [launchId]: String(e) }
       ac.clear(launchId)

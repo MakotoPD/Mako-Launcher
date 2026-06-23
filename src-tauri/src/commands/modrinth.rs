@@ -162,13 +162,13 @@ pub async fn modrinth_search(params: SearchParams) -> Result<SearchResponse, Str
 
 // ===== Versions =====
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct VersionFileHashes {
     pub sha1: Option<String>,
     pub sha512: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct VersionFile {
     pub url: String,
     pub filename: String,
@@ -177,14 +177,14 @@ pub struct VersionFile {
     pub hashes: VersionFileHashes,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Dependency {
     pub project_id: Option<String>,
     pub version_id: Option<String>,
     pub dependency_type: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Version {
     pub id: String,
     #[serde(default)]
@@ -287,58 +287,170 @@ pub struct ModUpdate {
     version_number: String,
 }
 
-/// For each installed mod (from the content index), checks Modrinth for a newer
-/// compatible version. Returns only the ones that have an update available.
+/// sha1 of each Modrinth mod's on-disk jar, paired with its index entry. Used to
+/// query Modrinth's bulk update endpoint (one request for all mods).
+fn hash_modrinth_mods(instance_id: &str, index: &ContentIndex) -> Vec<(String, InstalledItem)> {
+    use sha1::{Digest, Sha1};
+    let dir = paths::instance_game_dir(instance_id).join("mods");
+    let mut out = Vec::new();
+    for item in index.items.iter().filter(|i| i.kind == "mod" && i.provider == "modrinth") {
+        let path = if dir.join(&item.filename).is_file() {
+            dir.join(&item.filename)
+        } else {
+            dir.join(format!("{}.disabled", item.filename))
+        };
+        let Ok(bytes) = std::fs::read(&path) else { continue };
+        let mut h = Sha1::new();
+        h.update(&bytes);
+        out.push((format!("{:x}", h.finalize()), item.clone()));
+    }
+    out
+}
+
+/// Bulk "latest compatible version per file hash" via `POST /version_files/update`.
+/// One request resolves updates for every mod — avoids per-mod requests (429s).
+async fn bulk_latest_versions(
+    hashes: &[String],
+    loaders: &Option<Vec<String>>,
+    game_versions: &Option<Vec<String>>,
+) -> Result<HashMap<String, Version>, String> {
+    if hashes.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let mut body = serde_json::json!({ "hashes": hashes, "algorithm": "sha1" });
+    if let Some(l) = loaders.as_ref().filter(|l| !l.is_empty()) {
+        body["loaders"] = serde_json::json!(l);
+    }
+    if let Some(g) = game_versions.as_ref().filter(|g| !g.is_empty()) {
+        body["game_versions"] = serde_json::json!(g);
+    }
+    let resp = send(http().post(format!("{API}/version_files/update")).json(&body)).await?;
+    if !resp.status().is_success() {
+        return Err(format!("update check failed: {}", resp.status()));
+    }
+    resp.json::<HashMap<String, Version>>().await.map_err(|e| e.to_string())
+}
+
+/// For each installed mod, checks for a newer compatible version. Modrinth mods
+/// are resolved in a single bulk request; CurseForge mods per-project.
 #[tauri::command]
 pub async fn check_mod_updates(
     instance_id: String,
     loaders: Option<Vec<String>>,
     game_versions: Option<Vec<String>>,
 ) -> Result<Vec<ModUpdate>, String> {
-    let http = http();
     let index = read_content_index(&instance_id);
     let mut out = Vec::new();
 
-    for item in index.items.iter().filter(|i| i.kind == "mod") {
-        // CurseForge mods resolve through the CurseForge API instead.
-        if item.provider == "curseforge" {
-            if let Some((vid, vnum)) =
-                crate::commands::curseforge::latest_file(&item.project_id, &loaders, &game_versions).await
-            {
-                if vid != item.version_id {
-                    out.push(ModUpdate { project_id: item.project_id.clone(), version_id: vid, version_number: vnum });
+    // Modrinth — one bulk request for all mods.
+    let hashed = hash_modrinth_mods(&instance_id, &index);
+    if !hashed.is_empty() {
+        let hashes: Vec<String> = hashed.iter().map(|(h, _)| h.clone()).collect();
+        if let Ok(map) = bulk_latest_versions(&hashes, &loaders, &game_versions).await {
+            for (hash, item) in &hashed {
+                if let Some(v) = map.get(hash) {
+                    if v.id != item.version_id {
+                        out.push(ModUpdate {
+                            project_id: item.project_id.clone(),
+                            version_id: v.id.clone(),
+                            version_number: v.version_number.clone(),
+                        });
+                    }
                 }
             }
-            continue;
         }
+    }
 
-        let mut req = http.get(format!("{API}/project/{}/version", item.project_id));
-        if let Some(l) = loaders.as_ref().filter(|l| !l.is_empty()) {
-            if let Ok(j) = serde_json::to_string(l) {
-                req = req.query(&[("loaders", j)]);
-            }
-        }
-        if let Some(g) = game_versions.as_ref().filter(|g| !g.is_empty()) {
-            if let Ok(j) = serde_json::to_string(g) {
-                req = req.query(&[("game_versions", j)]);
-            }
-        }
-        let Ok(resp) = send(req).await else { continue };
-        if !resp.status().is_success() {
-            continue;
-        }
-        let Ok(versions) = resp.json::<Vec<Version>>().await else { continue };
-        if let Some(latest) = versions.into_iter().next() {
-            if latest.id != item.version_id {
-                out.push(ModUpdate {
-                    project_id: item.project_id.clone(),
-                    version_id: latest.id,
-                    version_number: latest.version_number,
-                });
+    // CurseForge — one bulk request for all CF mods.
+    let cf_items: Vec<&InstalledItem> =
+        index.items.iter().filter(|i| i.kind == "mod" && i.provider == "curseforge").collect();
+    if !cf_items.is_empty() {
+        let pids: Vec<String> = cf_items.iter().map(|i| i.project_id.clone()).collect();
+        let map = crate::commands::curseforge::bulk_latest_files(&pids, &loaders, &game_versions).await;
+        for item in cf_items {
+            if let Some((vid, vnum)) = map.get(&item.project_id) {
+                if vid != &item.version_id {
+                    out.push(ModUpdate {
+                        project_id: item.project_id.clone(),
+                        version_id: vid.clone(),
+                        version_number: vnum.clone(),
+                    });
+                }
             }
         }
     }
     Ok(out)
+}
+
+/// Updates every Modrinth mod at once: one bulk version lookup, then concurrent
+/// CDN downloads — no per-mod API calls. Returns how many were updated.
+/// (CurseForge mods are updated individually by the frontend.)
+#[tauri::command]
+pub async fn update_all_mods(
+    instance_id: String,
+    loaders: Option<Vec<String>>,
+    game_versions: Option<Vec<String>>,
+) -> Result<usize, String> {
+    let mut index = read_content_index(&instance_id);
+    let mods_dir = paths::instance_game_dir(&instance_id).join("mods");
+
+    let hashed = hash_modrinth_mods(&instance_id, &index);
+    if hashed.is_empty() {
+        return Ok(0);
+    }
+    let hashes: Vec<String> = hashed.iter().map(|(h, _)| h.clone()).collect();
+    let map = bulk_latest_versions(&hashes, &loaders, &game_versions).await?;
+
+    // Plan which mods actually have a newer version.
+    let mut plan: Vec<(usize, Version)> = Vec::new();
+    for (hash, item) in &hashed {
+        if let Some(v) = map.get(hash) {
+            if v.id != item.version_id {
+                if let Some(pos) = index.items.iter().position(|i| i.project_id == item.project_id && i.provider == "modrinth") {
+                    plan.push((pos, v.clone()));
+                }
+            }
+        }
+    }
+    if plan.is_empty() {
+        return Ok(0);
+    }
+
+    // Download new files concurrently from the CDN.
+    let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(8));
+    let mut set = tokio::task::JoinSet::new();
+    for (pos, v) in plan {
+        let Some(file) = v.files.iter().find(|f| f.primary).or_else(|| v.files.first()).cloned() else { continue };
+        let mods_dir = mods_dir.clone();
+        let http = http();
+        let sem = sem.clone();
+        set.spawn(async move {
+            let _permit = sem.acquire_owned().await.ok()?;
+            let bytes = download_direct(&http, &file.url).await.ok()?;
+            std::fs::write(mods_dir.join(safe_name(&file.filename)), &bytes).ok()?;
+            Some((pos, v, file.filename))
+        });
+    }
+
+    let mut updated = 0usize;
+    while let Some(res) = set.join_next().await {
+        let Ok(Some((pos, v, new_filename))) = res else { continue };
+        let item = &mut index.items[pos];
+        let old = item.filename.clone();
+        if old != new_filename {
+            let _ = std::fs::remove_file(mods_dir.join(&old));
+            let _ = std::fs::remove_file(mods_dir.join(format!("{old}.disabled")));
+        }
+        item.version_id = v.id;
+        item.version_number = v.version_number;
+        item.filename = new_filename;
+        item.game_versions = v.game_versions;
+        item.loaders = v.loaders;
+        updated += 1;
+    }
+
+    write_content_index(&instance_id, &index)?;
+    Ok(updated)
 }
 
 // ===== Categories (for filter chips) =====

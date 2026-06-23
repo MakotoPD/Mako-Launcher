@@ -339,12 +339,9 @@ async function updateAll() {
   updatingAll.value = true
   const tid = activity.startTask(t('activity.updatingMods'))
   try {
-    for (const m of mods.value) {
-      const pid = m.project_id
-      if (!pid) continue
-      const u = updates.value[pid]
-      if (u) await applyVersion(m, u.version_id)
-    }
+    // Both providers update via bulk backend calls (no per-mod requests → no 429).
+    await modrinth.updateAll(props.instanceId, filterLoaders.value, filterGv.value)
+    await curseforge.updateAll(props.instanceId, filterLoaders.value, filterGv.value)
     await load()
   } catch (e) {
     toast.add({ title: String(e), color: 'error' })

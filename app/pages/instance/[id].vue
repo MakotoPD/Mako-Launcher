@@ -12,7 +12,17 @@
       <!-- hero -->
       <div class="relative overflow-hidden rounded-2xl border border-default bg-linear-[135deg] from-primary-500/12 to-transparent p-6">
         <div class="flex flex-wrap items-center gap-5">
-          <InstanceIcon :instance="instance" class="size-20 shrink-0 rounded-2xl text-3xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]" />
+          <button
+            type="button"
+            class="group/icon relative size-20 shrink-0 overflow-hidden rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+            :title="$t('instance.changeIcon')"
+            @click="changeIcon"
+          >
+            <InstanceIcon :key="iconKey" :instance="instance" class="size-full rounded-2xl text-3xl" />
+            <span class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover/icon:opacity-100">
+              <UIcon name="i-lucide-pencil" class="size-5 text-white" />
+            </span>
+          </button>
           <div class="min-w-0 flex-1">
             <h1 class="truncate text-2xl font-bold tracking-tight">{{ instance.name }}</h1>
             <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -182,6 +192,7 @@
 
 <script setup lang="ts">
 import { invoke } from '@tauri-apps/api/core'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import type { ModpackUpdate } from '~/types/modrinth'
 import type { QuickPlay } from '~/types/launcher'
 
@@ -193,6 +204,7 @@ const sysMem = useSystemMemory()
 const toast = useToast()
 const { t } = useI18n()
 const exportModal = useExportModal()
+const changeLoaderModal = useChangeLoaderModal()
 
 const id = computed(() => String(route.params.id))
 const mc = useMinecraftLaunch(id)
@@ -349,6 +361,11 @@ const menuItems = computed(() => [[
     icon: 'i-lucide-package',
     onSelect: () => { if (instance.value) exportModal.open(id.value, instance.value.name) },
   },
+  {
+    label: t('changeLoader.menu'),
+    icon: 'i-lucide-layers',
+    onSelect: () => changeLoaderModal.open(id.value),
+  },
 ], [
   {
     label: t('common.remove'),
@@ -418,6 +435,26 @@ const handleQuickPlay = (qp: QuickPlay) => launchWith(qp)
 async function openGameFolder() {
   try {
     await invoke('open_instance_game_folder', { id: id.value })
+  } catch (e) {
+    toast.add({ title: String(e), color: 'error' })
+  }
+}
+
+// --- change icon (click the hero icon) ---
+const iconKey = ref(0)
+async function changeIcon() {
+  try {
+    const picked = await openDialog({
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+    })
+    if (typeof picked !== 'string') return
+    await invoke('set_instance_icon', { id: id.value, sourcePath: picked })
+    invalidateInstanceIcon(id.value)
+    iconKey.value++
+    await instances.load()
+    toast.add({ title: t('instance.iconChanged'), color: 'success' })
   } catch (e) {
     toast.add({ title: String(e), color: 'error' })
   }

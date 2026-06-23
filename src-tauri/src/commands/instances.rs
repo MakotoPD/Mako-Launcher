@@ -103,6 +103,17 @@ pub fn get_instance_icon_path(id: String) -> Option<String> {
     }
 }
 
+/// Sets an instance's icon from a chosen image file (copied to `icon.png`).
+#[tauri::command]
+pub fn set_instance_icon(id: String, source_path: String) -> Result<(), String> {
+    let mut instance = store::read_json::<Instance>(&paths::instance_config_file(&id))?
+        .ok_or_else(|| format!("instance '{id}' not found"))?;
+    std::fs::copy(&source_path, paths::instance_icon_file(&id))
+        .map_err(|e| format!("copy icon: {e}"))?;
+    instance.icon = Some("icon.png".to_string());
+    store::write_json(&paths::instance_config_file(&id), &instance)
+}
+
 /// Overwrites an existing instance's metadata. The `id` must already exist.
 #[tauri::command]
 pub fn update_instance(instance: Instance) -> Result<(), String> {

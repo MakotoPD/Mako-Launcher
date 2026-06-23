@@ -122,7 +122,9 @@
     "updateNow": "Aktualizuj",
     "updated": "Modpack zaktualizowany",
     "export": "Eksportuj / Backup",
-    "exported": "Instancja wyeksportowana"
+    "exported": "Instancja wyeksportowana",
+    "changeIcon": "Zmień ikonę",
+    "iconChanged": "Ikona zmieniona"
   },
   "common": {
     "save": "Zapisz",
@@ -207,6 +209,15 @@
     "count": "{n} modów",
     "save": "Zapisz",
     "saved": "Lista modów zapisana"
+  },
+  "changeLoader": {
+    "menu": "Mod loader",
+    "title": "Zmień mod loader",
+    "desc": "Wybierz loader dla Minecraft {mc}. Istniejące mody mogą wymagać aktualizacji.",
+    "change": "Zmień",
+    "apply": "Zastosuj",
+    "done": "Loader zmieniony",
+    "settingsHint": "Przełączaj między Fabric, Forge, NeoForge, Quilt lub Vanilla."
   },
   "onboarding": {
     "welcomeTitle": "Witaj w Mako Launcher",

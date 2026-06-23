@@ -187,6 +187,9 @@ pub async fn launch_instance(
 async fn launch_inner(app: &AppHandle, id: &str, quick_play: Option<QuickPlay>) -> Result<(), String> {
     let instance: Instance =
         store::read_json(&paths::instance_config_file(id))?.ok_or("instance not found")?;
+    // Stamp "last played" up front (at launch attempt), so the library reflects
+    // it immediately even while the game is still installing/starting.
+    let _ = instances::touch_last_played(id);
     let settings = get_settings()?;
     let account = refresh_active_account().await?;
 
@@ -297,8 +300,6 @@ async fn launch_inner(app: &AppHandle, id: &str, quick_play: Option<QuickPlay>) 
                 .map_err(|e| format!("launch failed: {e}"))?
         }
     };
-
-    let _ = instances::touch_last_played(id);
 
     // Privacy-gated extras.
     let track_playtime = settings.track_playtime;
