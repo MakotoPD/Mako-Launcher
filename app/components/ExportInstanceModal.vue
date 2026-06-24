@@ -45,6 +45,7 @@
               :key="target.id"
               :instance-id="target.id"
               :excluded="excluded"
+              :included="included"
               :toggle="toggle"
             />
           </div>
@@ -85,6 +86,7 @@ const version = ref('1.0.0')
 const meta = ref('') // summary (mrpack) or author (curseforge)
 const optionalDisabled = ref(false)
 const excluded = ref<Set<string>>(new Set())
+const included = ref<Set<string>>(new Set())
 const exporting = ref(false)
 const error = ref<string | null>(null)
 const cfEnabled = ref(false)
@@ -102,15 +104,29 @@ const formats = computed<{ value: Format, label: string, desc: string, icon: str
   return list
 })
 
-function toggle(path: string, _isDir: boolean) {
-  const next = new Set(excluded.value)
-  if (next.has(path)) {
-    next.delete(path)
-  } else {
-    for (const e of [...next]) if (e === path || e.startsWith(path + '/')) next.delete(e)
-    next.add(path)
+// Nearest ancestor-or-self marker wins; default included.
+function isIncluded(path: string): boolean {
+  const parts = path.split('/')
+  for (let i = parts.length; i >= 1; i--) {
+    const p = parts.slice(0, i).join('/')
+    if (included.value.has(p)) return true
+    if (excluded.value.has(p)) return false
   }
-  excluded.value = next
+  return true
+}
+
+// Toggling a node flips its effective state and overrides any markers beneath it
+// — so you can exclude a folder yet re-include one child (e.g. config/fancymenu).
+function toggle(path: string, _isDir: boolean) {
+  const wasIncluded = isIncluded(path)
+  const ex = new Set(excluded.value)
+  const inc = new Set(included.value)
+  for (const e of [...ex]) if (e === path || e.startsWith(path + '/')) ex.delete(e)
+  for (const e of [...inc]) if (e === path || e.startsWith(path + '/')) inc.delete(e)
+  if (wasIncluded) ex.add(path)
+  else inc.add(path)
+  excluded.value = ex
+  included.value = inc
 }
 
 watch(isOpen, (open) => {
@@ -121,6 +137,7 @@ watch(isOpen, (open) => {
     optionalDisabled.value = false
     error.value = null
     excluded.value = new Set(DEFAULT_EXCLUDE)
+    included.value = new Set()
     curseforge.enabled().then(v => (cfEnabled.value = v)).catch(() => (cfEnabled.value = false))
   }
 })
@@ -133,7 +150,7 @@ async function doExport() {
   const ext = format.value === 'mrpack' ? 'mrpack' : 'zip'
   const filterName = format.value === 'mrpack'
     ? 'Modrinth modpack'
-    : format.value === 'curseforge' ? 'CurseForge modpack' : 'Mako backup'
+    : format.value === 'curseforge' ? 'CurseForge modpack' : 'Spectra backup'
   const safe = tgt.name.replace(/[^\w.\- ]+/g, '_').trim() || 'instance'
 
   try {
@@ -146,17 +163,18 @@ async function doExport() {
     exporting.value = true
     const tid = activity.startTask(t('activity.exportingInstance', { name: tgt.name }))
     const exclude = [...excluded.value]
+    const include = [...included.value]
     try {
       if (format.value === 'mrpack') {
         await invoke('export_mrpack', {
-          id: tgt.id, dest, version: version.value || null, summary: meta.value || null, exclude, optionalDisabled: optionalDisabled.value,
+          id: tgt.id, dest, version: version.value || null, summary: meta.value || null, exclude, include, optionalDisabled: optionalDisabled.value,
         })
       } else if (format.value === 'curseforge') {
         await invoke('export_curseforge', {
-          id: tgt.id, dest, version: version.value || null, author: meta.value || null, exclude, optionalDisabled: optionalDisabled.value,
+          id: tgt.id, dest, version: version.value || null, author: meta.value || null, exclude, include, optionalDisabled: optionalDisabled.value,
         })
       } else {
-        await invoke('export_instance', { id: tgt.id, dest, exclude })
+        await invoke('export_instance', { id: tgt.id, dest, exclude, include })
       }
       toast.add({ title: t('export.done'), color: 'success' })
       close()

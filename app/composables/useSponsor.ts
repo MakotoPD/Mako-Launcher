@@ -18,7 +18,7 @@ export const SPONSOR: Sponsor = {
   url: 'https://modrinth.com/modpack/zebatkowo',
 }
 
-const KEY = 'mako-sponsor-hidden'
+const KEY = 'spectra-sponsor-hidden'
 
 /**
  * Visibility state for the sponsor section on the home page. It's toggled only

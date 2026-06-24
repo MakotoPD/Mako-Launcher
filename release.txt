@@ -1,0 +1,11 @@
+## Changes (v0.1.0)
+
+### ✨ Features & Improvements
+- **Auto-Update**: Discord-style background updater — click "Update" in Settings and the new version downloads, installs silently and relaunches with no installer clicks.
+- **CurseForge Support**: Browse, install and update CurseForge mods, modpacks, resource packs and shaders. Blocked mods get a guided download flow.
+- **Modrinth & CurseForge Export**: Export instances as `.mrpack` or CurseForge `.zip` with a Prism-style file tree. Partial selection lets you exclude a folder yet re-include a single child (e.g. only `config/fancymenu`).
+- **Bulk Updates**: "Update all" now uses bulk API endpoints to avoid rate limits.
+- **Instance Tweaks**: Change the mod loader after creation, change the instance icon by clicking it, and mods with available updates sort to the top.
+
+### 🐛 Bug Fixes
+- Fixed "last played" not updating — it's now saved at launch start.

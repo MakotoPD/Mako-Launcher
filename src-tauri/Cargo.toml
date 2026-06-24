@@ -1,17 +1,17 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "Minecraft launcher"
+description = "A modern launcher for Minecraft that allows you to easily manage multiple installations of Minecraft at once"
 authors = ["MakotoPD"]
 license = "MIT"
-repository = "https://github.com/MakotoPD/Mako-Launcher"
+repository = "https://github.com/MakotoPD/Spectra-Launcher"
 edition = "2021"
 rust-version = "1.77.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "mako_launcher_lib"
+name = "spectra_launcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -30,6 +30,12 @@ tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-store = "2"
 tauri-plugin-os = "2"
+
+# Background auto-update (Discord-style: silent download + install + relaunch)
+tauri-plugin-process = "2"
+
+[target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
+tauri-plugin-updater = "2"
 
 # Minecraft engine: install/launch, Microsoft auth, Fabric/Quilt/Forge/NeoForge,
 # automatic Java provisioning. https://github.com/BatuhanAksoyy/lyceris

@@ -269,11 +269,11 @@ Stan ze store'a: `mc.stage` (`idle`/`installing`/`running`), `mc.progress`,
 
 ## 6. Gdzie zapisują się dane
 
-Korzeń danych: `%APPDATA%/MakoLauncher` (Windows). Można nadpisać zmienną
+Korzeń danych: `%APPDATA%/SpectraLauncher` (Windows). Można nadpisać zmienną
 środowiskową `MAKO_DATA_DIR` (np. instalacja przenośna).
 
 ```
-MakoLauncher/
+SpectraLauncher/
 ├── launcher.json     ustawienia globalne
 ├── accounts.json     konta (Microsoft + offline)
 ├── instances/<id>/   instancje (instance.json + minecraft/)

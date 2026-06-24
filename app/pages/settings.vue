@@ -1,9 +1,9 @@
 <template>
-  <div class="h-full overflow-y-auto p-6 lg:p-8">
-    <div class="mx-auto max-w-5xl space-y-6 h-full min-h-fit relative">
-      <h1 class="text-2xl font-bold tracking-tight">{{ t('settings.title') }}</h1>
+  <div class="h-full flex flex-col p-6 lg:p-8">
+    <div class="mx-auto w-full max-w-5xl flex flex-1 min-h-0 flex-col gap-6">
+      <h1 class="shrink-0 text-2xl font-bold tracking-tight">{{ t('settings.title') }}</h1>
 
-      <div class="grid grid-cols-1 gap-6 md:grid-cols-[220px_1fr]">
+      <div class="grid min-h-0 flex-1 grid-cols-1 gap-6 md:grid-cols-[220px_1fr]">
         <!-- sub-nav -->
         <nav class="flex flex-col gap-1 relative">
           <button
@@ -21,7 +21,7 @@
         </nav>
 
         <!-- content -->
-        <div class="min-w-0 space-y-6">
+        <div class="min-w-0 min-h-0 space-y-6 overflow-y-auto px-2">
           <!-- Appearance -->
           <template v-if="section === 'appearance'">
             <div>
@@ -222,15 +222,36 @@
           </template>
         </div>
       </div>
-
-      <div class="absolute left-0 bottom-0 flex gap-2 items-center">
-        <img src="/logo-transparent.png" alt="Mako Launcher Icon" class="w-8 h-8 rounded-sm" />
+    </div>
+    <div class="shrink-0 mx-auto w-full max-w-5xl flex gap-3 items-center border-t border-default pt-4 mt-4">
+        <img src="/logo-transparent.png" alt="Spectra Launcher Icon" class="w-8 h-8 rounded-sm" />
         <div>
-          <p>Mako Launcher v{{ version }} beta</p>
+          <p>Spectra Launcher v{{ version }}</p>
           <p class="text-xs text-muted">Made with by <a href="https://github.com/MakotoPD" target="_blank" rel="noopener noreferrer">MakotoPD</a></p>
         </div>
+        <UButton
+          v-if="updater.available.value"
+          color="primary"
+          icon="i-lucide-download"
+          :loading="updater.status.value === 'downloading' || updater.status.value === 'ready'"
+          :label="updater.status.value === 'ready'
+            ? t('update.ready')
+            : updater.status.value === 'downloading'
+              ? t('update.downloading', { progress: updater.progress.value })
+              : t('update.available', { version: updater.newVersion.value })"
+          @click="updater.downloadAndInstall()"
+        />
+        <UButton
+          v-else
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          icon="i-lucide-refresh-cw"
+          :loading="updater.status.value === 'checking'"
+          :label="updater.status.value === 'uptodate' ? t('update.uptodate') : t('update.check')"
+          @click="updater.checkForUpdates(false)"
+        />
       </div>
-    </div>
   </div>
 </template>
 
@@ -247,6 +268,7 @@ const sponsor = useSponsor()
 const accounts = useAccountStore()
 const java = useJava()
 const sysMem = useSystemMemory()
+const updater = useAutoUpdate()
 
 type Section = 'appearance' | 'language' | 'privacy' | 'java' | 'defaults' | 'accounts'
 const sections: { key: Section; icon: string }[] = [

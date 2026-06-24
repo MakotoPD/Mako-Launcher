@@ -26,7 +26,7 @@ const MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_mani
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .user_agent("MakoLauncher")
+        .user_agent("SpectraLauncher")
         .build()
         .map_err(|e| e.to_string())
 }

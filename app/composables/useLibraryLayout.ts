@@ -15,7 +15,7 @@ interface RawGroup {
   ids: string[]
 }
 
-const KEY = 'mako-library-layout'
+const KEY = 'spectra-library-layout'
 const UNGROUPED_ID = '__ungrouped'
 
 function loadRaw(): RawGroup[] {

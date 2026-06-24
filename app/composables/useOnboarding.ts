@@ -1,4 +1,4 @@
-const KEY = 'mako-onboarded'
+const KEY = 'spectra-onboarded'
 
 /** First-run wizard state. The completion flag lives in localStorage. */
 export const useOnboarding = () => {

@@ -3,7 +3,7 @@
 //!
 //! Detection reads each launcher's per-instance metadata to recover the
 //! Minecraft version + loader; importing copies the instance's game files
-//! (mods, config, saves, …) into a fresh Mako instance. Regenerable/heavy
+//! (mods, config, saves, …) into a fresh Spectra instance. Regenerable/heavy
 //! folders (versions, libraries, assets, …) are skipped — Lyceris re-provisions
 //! them on first launch.
 
@@ -42,7 +42,7 @@ pub fn detect_external_instances() -> Vec<ExternalInstance> {
     out
 }
 
-/// Creates a new Mako instance from a detected external one, copying its files.
+/// Creates a new Spectra instance from a detected external one, copying its files.
 #[tauri::command]
 pub fn import_external_instance(
     name: String,
@@ -76,15 +76,15 @@ pub fn import_external_instance(
 
 #[derive(Serialize, Deserialize)]
 struct BackupManifest {
-    /// Format marker so import can recognise a Mako backup.
+    /// Format marker so import can recognise a Spectra backup.
     format: String,
     version: u32,
     /// The full instance config (its id is replaced on restore).
     instance: Instance,
 }
 
-const BACKUP_FORMAT: &str = "mako-instance-backup";
-pub const BACKUP_MANIFEST: &str = "mako-instance.json";
+const BACKUP_FORMAT: &str = "spectra-instance-backup";
+pub const BACKUP_MANIFEST: &str = "spectra-instance.json";
 
 /// A child entry of a game-dir folder, for the export dialog's lazy file tree.
 #[derive(Serialize)]
@@ -172,7 +172,7 @@ pub async fn import_dropped(
     Ok(result)
 }
 
-/// True if a zip looks like a modpack (Modrinth/CurseForge) or a Mako backup.
+/// True if a zip looks like a modpack (Modrinth/CurseForge) or a Spectra backup.
 fn is_instance_archive(path: &Path) -> bool {
     let Ok(bytes) = std::fs::read(path) else { return false };
     let Ok(mut z) = zip::ZipArchive::new(Cursor::new(bytes)) else { return false };
@@ -230,35 +230,53 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("write {path}: {e}"))
 }
 
-/// True if `rel` (or any of its ancestors) is in the exclude set.
-pub fn is_excluded(rel: &str, excluded: &std::collections::HashSet<String>) -> bool {
-    if excluded.contains(rel) {
-        return true;
+/// Export selection: paths the user explicitly excluded or re-included. The
+/// nearest ancestor-or-self marker wins, so you can exclude a folder yet still
+/// include one child of it (e.g. exclude `config`, include `config/fancymenu`).
+pub struct ExportFilter {
+    pub included: std::collections::HashSet<String>,
+    pub excluded: std::collections::HashSet<String>,
+}
+
+impl ExportFilter {
+    pub fn new(include: Vec<String>, exclude: Vec<String>) -> Self {
+        Self { included: include.into_iter().collect(), excluded: exclude.into_iter().collect() }
     }
-    let mut acc = String::new();
-    for part in rel.split('/') {
-        if acc.is_empty() {
-            acc.push_str(part);
-        } else {
-            acc.push('/');
-            acc.push_str(part);
+
+    /// Whether a path is included (default: yes, unless the nearest marker excludes it).
+    pub fn includes(&self, rel: &str) -> bool {
+        let parts: Vec<&str> = rel.split('/').collect();
+        for i in (1..=parts.len()).rev() {
+            let p = parts[..i].join("/");
+            if self.included.contains(&p) {
+                return true;
+            }
+            if self.excluded.contains(&p) {
+                return false;
+            }
         }
-        if excluded.contains(&acc) {
+        true
+    }
+
+    /// Whether to descend into a dir: it's included, or holds an include override.
+    pub fn should_descend(&self, dir_rel: &str) -> bool {
+        if self.includes(dir_rel) {
             return true;
         }
+        let prefix = format!("{dir_rel}/");
+        self.included.iter().any(|p| p.starts_with(&prefix))
     }
-    false
 }
 
 /// Exports an instance to a self-contained `.zip` backup: its config (settings,
 /// loader, version), icon, and game files minus the user-excluded paths and the
 /// always-skipped regenerable folders. Restorable via the import file flow.
 #[tauri::command]
-pub fn export_instance(id: String, dest: String, exclude: Vec<String>) -> Result<(), String> {
+pub fn export_instance(id: String, dest: String, exclude: Vec<String>, include: Vec<String>) -> Result<(), String> {
     let instance: Instance =
         store::read_json(&paths::instance_config_file(&id))?.ok_or("instance not found")?;
     let game_dir = paths::instance_game_dir(&id);
-    let excluded: std::collections::HashSet<String> = exclude.into_iter().collect();
+    let filter = ExportFilter::new(include, exclude);
 
     let file = std::fs::File::create(&dest).map_err(|e| format!("create {dest}: {e}"))?;
     let mut zip = zip::ZipWriter::new(file);
@@ -278,18 +296,18 @@ pub fn export_instance(id: String, dest: String, exclude: Vec<String>) -> Result
         zip.write_all(&bytes).map_err(|e| e.to_string())?;
     }
 
-    zip_game_files(&mut zip, &game_dir, "", &excluded, opts)?;
+    zip_game_files(&mut zip, &game_dir, "", &filter, opts)?;
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Recursively adds game-dir files under `minecraft/`, honoring the exclude set
+/// Recursively adds game-dir files under `minecraft/`, honoring the selection
 /// and skipping regenerable top-level folders.
 fn zip_game_files(
     zip: &mut zip::ZipWriter<std::fs::File>,
     base: &Path,
     rel: &str,
-    excluded: &std::collections::HashSet<String>,
+    filter: &ExportFilter,
     opts: zip::write::SimpleFileOptions,
 ) -> Result<(), String> {
     let dir = if rel.is_empty() { base.to_path_buf() } else { base.join(rel) };
@@ -300,13 +318,12 @@ fn zip_game_files(
             continue;
         }
         let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
-        if is_excluded(&child_rel, excluded) {
-            continue;
-        }
         let path = e.path();
         if path.is_dir() {
-            zip_game_files(zip, base, &child_rel, excluded, opts)?;
-        } else {
+            if filter.should_descend(&child_rel) {
+                zip_game_files(zip, base, &child_rel, filter, opts)?;
+            }
+        } else if filter.includes(&child_rel) {
             let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
             zip.start_file(format!("minecraft/{child_rel}"), opts).map_err(|e| e.to_string())?;
             zip.write_all(&bytes).map_err(|e| e.to_string())?;
@@ -315,14 +332,14 @@ fn zip_game_files(
     Ok(())
 }
 
-/// True if `bytes` is a Mako instance backup zip.
+/// True if `bytes` is a Spectra instance backup zip.
 pub fn is_backup_zip(bytes: &[u8]) -> bool {
     let Ok(mut archive) = zip::ZipArchive::new(Cursor::new(bytes)) else { return false };
     let found = archive.by_name(BACKUP_MANIFEST).is_ok();
     found
 }
 
-/// Restores an instance from a Mako backup zip into a brand-new instance.
+/// Restores an instance from a Spectra backup zip into a brand-new instance.
 pub fn restore_backup_from_bytes(bytes: &[u8]) -> Result<Instance, String> {
     let mut archive =
         zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| format!("open backup: {e}"))?;
@@ -330,7 +347,7 @@ pub fn restore_backup_from_bytes(bytes: &[u8]) -> Result<Instance, String> {
     let manifest: BackupManifest = {
         let mut f = archive
             .by_name(BACKUP_MANIFEST)
-            .map_err(|_| "not a Mako backup".to_string())?;
+            .map_err(|_| "not a Spectra backup".to_string())?;
         let mut s = String::new();
         f.read_to_string(&mut s).map_err(|e| e.to_string())?;
         serde_json::from_str(&s).map_err(|e| format!("parse manifest: {e}"))?

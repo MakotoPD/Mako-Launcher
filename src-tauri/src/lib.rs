@@ -48,8 +48,15 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Background auto-update (desktop only).
+            #[cfg(desktop)]
+            {
+                let _ = app.handle().plugin(tauri_plugin_updater::Builder::new().build());
+            }
             Ok(())
         })
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())

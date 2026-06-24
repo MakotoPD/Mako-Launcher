@@ -23,15 +23,14 @@
             type="button"
             class="flex size-4 shrink-0 items-center justify-center rounded border transition"
             :class="checkboxClass(child)"
-            :disabled="parentExcluded"
-            @click="onToggle(child)"
+            @click="toggle(childPath(child.name), child.is_dir)"
           >
             <UIcon v-if="state(child) === 'checked'" name="i-lucide-check" class="size-3 text-white" />
             <UIcon v-else-if="state(child) === 'indeterminate'" name="i-lucide-minus" class="size-3 text-white" />
           </button>
 
           <UIcon :name="child.is_dir ? 'i-lucide-folder' : 'i-lucide-file'" class="size-4 shrink-0 text-neutral-500" />
-          <span class="min-w-0 flex-1 truncate text-sm" :class="{ 'text-neutral-500 line-through': effectiveExcluded(child) }">{{ child.name }}</span>
+          <span class="min-w-0 flex-1 truncate text-sm" :class="{ 'text-neutral-500 line-through': state(child) === 'unchecked' }">{{ child.name }}</span>
           <span v-if="!child.is_dir" class="shrink-0 font-mono text-[11px] text-muted">{{ fmtSize(child.size) }}</span>
         </div>
 
@@ -40,8 +39,8 @@
           :instance-id="instanceId"
           :dir="childPath(child.name)"
           :excluded="excluded"
+          :included="included"
           :toggle="toggle"
-          :parent-excluded="effectiveExcluded(child)"
           :level="level + 1"
         />
       </div>
@@ -57,17 +56,16 @@ const props = withDefaults(defineProps<{
   instanceId: string
   dir?: string
   excluded: Set<string>
+  included: Set<string>
   toggle: (path: string, isDir: boolean) => void
-  parentExcluded?: boolean
   level?: number
-}>(), { dir: '', parentExcluded: false, level: 0 })
+}>(), { dir: '', level: 0 })
 
 const children = ref<DirChild[]>([])
 const loading = ref(false)
 const expanded = ref<Record<string, boolean>>({})
 
 const indent = computed(() => ({ paddingLeft: `${props.level * 16 + 4}px` }))
-
 const childPath = (name: string) => (props.dir ? `${props.dir}/${name}` : name)
 
 function fmtSize(n: number) {
@@ -77,29 +75,31 @@ function fmtSize(n: number) {
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
-const effectiveExcluded = (c: DirChild) => props.parentExcluded || props.excluded.has(childPath(c.name))
-const hasExcludedUnder = (path: string) => {
-  const p = path + '/'
-  for (const e of props.excluded) if (e.startsWith(p)) return true
+// Nearest ancestor-or-self marker wins; default included.
+function isIncluded(path: string): boolean {
+  const parts = path.split('/')
+  for (let i = parts.length; i >= 1; i--) {
+    const p = parts.slice(0, i).join('/')
+    if (props.included.has(p)) return true
+    if (props.excluded.has(p)) return false
+  }
+  return true
+}
+function hasMarkerUnder(path: string): boolean {
+  const prefix = path + '/'
+  for (const e of props.excluded) if (e.startsWith(prefix)) return true
+  for (const e of props.included) if (e.startsWith(prefix)) return true
   return false
 }
 
 type State = 'checked' | 'unchecked' | 'indeterminate'
 function state(c: DirChild): State {
-  if (effectiveExcluded(c)) return 'unchecked'
-  if (c.is_dir && hasExcludedUnder(childPath(c.name))) return 'indeterminate'
-  return 'checked'
+  const path = childPath(c.name)
+  if (c.is_dir && hasMarkerUnder(path)) return 'indeterminate'
+  return isIncluded(path) ? 'checked' : 'unchecked'
 }
-
 function checkboxClass(c: DirChild) {
-  if (props.parentExcluded) return 'border-white/15 bg-white/5 cursor-not-allowed opacity-50'
-  const s = state(c)
-  return s === 'unchecked' ? 'border-white/25 hover:border-white/40' : 'border-primary-500 bg-primary-500'
-}
-
-function onToggle(c: DirChild) {
-  if (props.parentExcluded) return
-  props.toggle(childPath(c.name), c.is_dir)
+  return state(c) === 'unchecked' ? 'border-white/25 hover:border-white/40' : 'border-primary-500 bg-primary-500'
 }
 
 function toggleExpand(name: string) {

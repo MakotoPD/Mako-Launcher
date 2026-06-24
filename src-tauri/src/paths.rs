@@ -1,4 +1,4 @@
-//! Mako Launcher data layout.
+//! Spectra Launcher data layout.
 //!
 //! Everything the launcher owns lives under a single, relocatable **data root**.
 //! Each Minecraft instance is fully self-contained (its own `minecraft/` game dir),
@@ -7,7 +7,7 @@
 //! re-downloading multi-hundred-MB JDKs.
 //!
 //! ```text
-//! <data root>/                      ($MAKO_DATA_DIR or <OS data dir>/MakoLauncher)
+//! <data root>/                      ($SPECTRA_DATA_DIR or <OS data dir>/SpectraLauncher)
 //! ├── launcher.json                 global settings (see models::Settings)
 //! ├── accounts.json                 saved Microsoft accounts (see models::AccountsFile)
 //! ├── instances/
@@ -23,14 +23,14 @@
 
 use std::path::PathBuf;
 
-const APP_DIR_NAME: &str = "MakoLauncher";
+const APP_DIR_NAME: &str = "SpectraLauncher";
 
 /// Resolves the data root.
 ///
-/// Priority: `MAKO_DATA_DIR` env override → OS data dir → current dir fallback.
+/// Priority: `SPECTRA_DATA_DIR` env override → OS data dir → current dir fallback.
 /// The override makes portable installs and tests trivial.
 pub fn data_root() -> PathBuf {
-    if let Ok(custom) = std::env::var("MAKO_DATA_DIR") {
+    if let Ok(custom) = std::env::var("SPECTRA_DATA_DIR") {
         if !custom.trim().is_empty() {
             return PathBuf::from(custom);
         }

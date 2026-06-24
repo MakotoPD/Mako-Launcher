@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  mako_launcher_lib::run();
+  spectra_launcher_lib::run();
 }

@@ -1,5 +1,5 @@
 <template>
-  <!-- Card from the Mako design, showing the instance the player launched most
+  <!-- Card from the Spectra design, showing the instance the player launched most
        recently (last played). -->
   <div class="mb-6 rounded-[15px] border border-primary-500/25 bg-linear-[160deg] from-primary-500/15 to-primary-500/5 p-[13px]">
     <div class="mb-[9px] text-[10px] font-semibold tracking-[0.12em] text-primary-300">

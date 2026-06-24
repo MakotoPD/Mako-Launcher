@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  # Read the version from tauri.conf.json and only continue if that version
+  # hasn't been released yet (so ordinary pushes to main don't spam releases).
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+      body: ${{ steps.notes.outputs.body }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from tauri.conf.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: v$VERSION"
+
+      - name: Check whether tag already exists
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $TAG is new — proceeding with release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes
+        id: notes
+        if: steps.check.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          VERSION="v${{ steps.version.outputs.version }}"
+          VERSION_NUM="${{ steps.version.outputs.version }}"
+
+          # Pull the changelog block for this version out of release.txt.
+          CHANGELOG=$(awk "/^## Changes \(${VERSION}\)/{flag=1; next} /^## Changes \(v[0-9]/{if(flag) exit} flag" release.txt)
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="No specific changes documented for this version."
+          fi
+
+          # GitHub replaces spaces in uploaded asset names with dots, so
+          # "Spectra Launcher_..." is served as "Spectra.Launcher_...".
+          {
+            echo "## 📥 Downloads"
+            echo ""
+            echo "| Platform | Architecture | Download |"
+            echo "|----------|-------------|----------|"
+            echo "| 🪟 Windows | x64 | [Spectra.Launcher_${VERSION_NUM}_x64-setup.exe](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_x64-setup.exe) |"
+            echo "| 🍎 macOS | Apple Silicon | [Spectra.Launcher_${VERSION_NUM}_aarch64.dmg](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_aarch64.dmg) |"
+            echo "| 🐧 Linux | x64 (AppImage) | [Spectra.Launcher_${VERSION_NUM}_amd64.AppImage](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_amd64.AppImage) |"
+            echo "| 🐧 Linux | x64 (deb) | [Spectra.Launcher_${VERSION_NUM}_amd64.deb](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_amd64.deb) |"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## 📝 What's Changed"
+            echo ""
+            echo "$CHANGELOG"
+          } > release_body.md
+
+          {
+            echo "body<<RELEASE_EOF"
+            cat release_body.md
+            echo "RELEASE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    environment: BUILD
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'ubuntu-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev file
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing — required so the launcher can verify auto-updates.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Build-time secrets embedded via build.rs (process env wins over .env).
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+        with:
+          tagName: v${{ needs.prepare.outputs.version }}
+          releaseName: 'Spectra Launcher v${{ needs.prepare.outputs.version }}'
+          releaseBody: ${{ needs.prepare.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

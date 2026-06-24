@@ -22,7 +22,7 @@ export const ACCENT_COLORS = [
 
 export type AccentColor = (typeof ACCENT_COLORS)[number]
 
-const STORAGE_KEY = 'mako-theme'
+const STORAGE_KEY = 'spectra-theme'
 
 interface PersistedTheme {
   mode: ThemeMode
@@ -44,7 +44,7 @@ function loadPersisted(): PersistedTheme {
 export const useThemeStore = defineStore('theme', {
   state: () => loadPersisted() as PersistedTheme,
   getters: {
-    /** Root background class for the app shell (matches the Mako design). */
+    /** Root background class for the app shell (matches the Spectra design). */
     bgClass(state): string {
       if (state.mode === 'oled') return 'bg-black'
       if (state.mode === 'zebatkowo') return 'bg-amber-950/10'

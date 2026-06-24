@@ -1,6 +1,6 @@
-# Mako Launcher
+# Spectra Launcher
 
-Mako Launcher is a modern, modular, and feature-rich Minecraft launcher built with Tauri v2 (Rust) and Nuxt 4 (Vue 3). It focuses on performance, sleek design, and seamless integration with modern Minecraft ecosystems like Modrinth.
+Spectra Launcher is a modern, modular, and feature-rich Minecraft launcher built with Tauri v2 (Rust) and Nuxt 4 (Vue 3). It focuses on performance, sleek design, and seamless integration with modern Minecraft ecosystems like Modrinth.
 
 ## 🚀 Features
 
@@ -54,7 +54,7 @@ Mako Launcher is a modern, modular, and feature-rich Minecraft launcher built wi
 The launcher uses a strictly modular data architecture. The UI communicates with the Rust backend entirely via Tauri commands and asynchronous events (e.g., `mc://console`, `mc://crashed`, `mc://multi-progress`).
 
 ### Data Directory Structure
-By default, data is stored in the OS-specific data directory under `MakoLauncher` (e.g., `%APPDATA%\MakoLauncher` on Windows), but can be overridden with the `MAKO_DATA_DIR` environment variable for portable installations.
+By default, data is stored in the OS-specific data directory under `SpectraLauncher` (e.g., `%APPDATA%\SpectraLauncher` on Windows), but can be overridden with the `SPECTRA_DATA_DIR` environment variable for portable installations.
 
 ```text
 <data root>/

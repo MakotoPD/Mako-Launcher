@@ -20,7 +20,7 @@ use crate::models::{Instance, Loader};
 use crate::{paths, store};
 
 const API: &str = "https://api.modrinth.com/v2";
-const USER_AGENT: &str = "MakotoPD/Mako-Launcher/0.1.0 (mako launcher)";
+const USER_AGENT: &str = "MakotoPD/Spectra-Launcher/0.1.0 (spectra launcher)";
 
 /// One shared client reused for every request, so connections are pooled instead
 /// of opening a fresh client (and TLS handshake) per call. Cloning is cheap — a
@@ -891,7 +891,7 @@ pub async fn modrinth_install_modpack(
 }
 
 /// Imports an instance from a local file. Handles three kinds, by content:
-///  - a Mako backup `.zip` (restored verbatim, offline),
+///  - a Spectra backup `.zip` (restored verbatim, offline),
 ///  - a Modrinth `.mrpack` (mods fetched from their CDN URLs; overrides bundled),
 ///  - a CurseForge `.zip` (rejected, with a pointer to the launcher-import path).
 #[tauri::command]
@@ -902,7 +902,7 @@ pub async fn import_file(
 ) -> Result<Instance, String> {
     let pack_bytes = std::fs::read(&path).map_err(|e| format!("read file: {e}"))?;
 
-    // Mako backup — fully offline restore.
+    // Spectra backup — fully offline restore.
     if crate::commands::import::is_backup_zip(&pack_bytes) {
         return crate::commands::import::restore_backup_from_bytes(&pack_bytes);
     }
@@ -993,6 +993,7 @@ pub async fn export_mrpack(
     version: Option<String>,
     summary: Option<String>,
     exclude: Vec<String>,
+    include: Vec<String>,
     optional_disabled: bool,
 ) -> Result<(), String> {
     use sha1::{Digest, Sha1};
@@ -1000,7 +1001,7 @@ pub async fn export_mrpack(
     let instance: Instance =
         store::read_json(&paths::instance_config_file(&id))?.ok_or("instance not found")?;
     let game_dir = paths::instance_game_dir(&id);
-    let excluded: std::collections::HashSet<String> = exclude.into_iter().collect();
+    let filter = crate::commands::import::ExportFilter::new(include, exclude);
 
     // Hash candidate downloadable content from the content folders.
     struct Cand {
@@ -1022,7 +1023,7 @@ pub async fn export_mrpack(
                 continue;
             }
             let rel = format!("{sub}/{name}");
-            if crate::commands::import::is_excluded(&rel, &excluded) {
+            if !filter.includes(&rel) {
                 continue;
             }
             let Ok(bytes) = std::fs::read(&path) else { continue };
@@ -1107,8 +1108,8 @@ pub async fn export_mrpack(
     zip.start_file("modrinth.index.json", opts).map_err(|e| e.to_string())?;
     zip.write_all(&json).map_err(|e| e.to_string())?;
 
-    // Everything not in the manifest (and not excluded) → overrides.
-    add_overrides(&mut zip, &game_dir, "", &excluded, &matched, optional_disabled, opts)?;
+    // Everything not in the manifest (and within the selection) → overrides.
+    add_overrides(&mut zip, &game_dir, "", &filter, &matched, optional_disabled, opts)?;
 
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
@@ -1121,7 +1122,7 @@ fn add_overrides(
     zip: &mut zip::ZipWriter<std::fs::File>,
     base: &Path,
     rel: &str,
-    excluded: &std::collections::HashSet<String>,
+    filter: &crate::commands::import::ExportFilter,
     matched: &std::collections::HashSet<String>,
     optional_disabled: bool,
     opts: zip::write::SimpleFileOptions,
@@ -1134,15 +1135,14 @@ fn add_overrides(
             continue;
         }
         let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
-        if crate::commands::import::is_excluded(&child_rel, excluded) {
-            continue;
-        }
         let path = e.path();
         if path.is_dir() {
-            add_overrides(zip, base, &child_rel, excluded, matched, optional_disabled, opts)?;
+            if filter.should_descend(&child_rel) {
+                add_overrides(zip, base, &child_rel, filter, matched, optional_disabled, opts)?;
+            }
             continue;
         }
-        if matched.contains(&child_rel) || is_junk(&child_rel) {
+        if !filter.includes(&child_rel) || matched.contains(&child_rel) || is_junk(&child_rel) {
             continue;
         }
         if child_rel.ends_with(".disabled") && !optional_disabled {

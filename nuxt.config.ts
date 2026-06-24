@@ -61,7 +61,7 @@ export default defineNuxtConfig({
     // user's choice across launches via a cookie.
     detectBrowserLanguage: {
       useCookie: true,
-      cookieKey: 'mako_locale',
+      cookieKey: 'spectra_locale',
       fallbackLocale: 'en',
       alwaysRedirect: false,
     },

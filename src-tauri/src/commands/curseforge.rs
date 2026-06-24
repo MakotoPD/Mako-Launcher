@@ -38,7 +38,7 @@ fn http() -> &'static reqwest::Client {
             headers.insert("x-api-key", v);
         }
         reqwest::Client::builder()
-            .user_agent("MakotoPD/Mako-Launcher/0.1.0")
+            .user_agent("MakotoPD/Spectra-Launcher/0.1.0")
             .default_headers(headers)
             .build()
             .expect("build curseforge client")
@@ -1632,12 +1632,13 @@ pub async fn export_curseforge(
     version: Option<String>,
     author: Option<String>,
     exclude: Vec<String>,
+    include: Vec<String>,
     optional_disabled: bool,
 ) -> Result<(), String> {
     let instance: Instance =
         crate::store::read_json(&paths::instance_config_file(&id))?.ok_or("instance not found")?;
     let game_dir = paths::instance_game_dir(&id);
-    let excluded: std::collections::HashSet<String> = exclude.into_iter().collect();
+    let filter = crate::commands::import::ExportFilter::new(include, exclude);
 
     // Hash candidate content (mods/resource packs/shaders) by CF fingerprint.
     struct Cand {
@@ -1659,7 +1660,7 @@ pub async fn export_curseforge(
                 continue;
             }
             let rel = format!("{sub}/{name}");
-            if crate::commands::import::is_excluded(&rel, &excluded) {
+            if !filter.includes(&rel) {
                 continue;
             }
             if let Ok(bytes) = std::fs::read(&path) {
@@ -1721,20 +1722,20 @@ pub async fn export_curseforge(
     zip.start_file("manifest.json", opts).map_err(|e| e.to_string())?;
     zip.write_all(&json).map_err(|e| e.to_string())?;
 
-    cf_add_overrides(&mut zip, &game_dir, "", &excluded, &matched, optional_disabled, opts)?;
+    cf_add_overrides(&mut zip, &game_dir, "", &filter, &matched, optional_disabled, opts)?;
 
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Walks the game dir adding files under `overrides/`, honoring the exclude set,
+/// Walks the game dir adding files under `overrides/`, honoring the selection,
 /// skipping regenerable folders, junk, manifest-referenced files and (unless
 /// `optional_disabled`) disabled mods.
 fn cf_add_overrides(
     zip: &mut zip::ZipWriter<std::fs::File>,
     base: &Path,
     rel: &str,
-    excluded: &std::collections::HashSet<String>,
+    filter: &crate::commands::import::ExportFilter,
     matched: &std::collections::HashSet<String>,
     optional_disabled: bool,
     opts: zip::write::SimpleFileOptions,
@@ -1747,16 +1748,15 @@ fn cf_add_overrides(
             continue;
         }
         let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
-        if crate::commands::import::is_excluded(&child_rel, excluded) {
-            continue;
-        }
         let path = e.path();
         if path.is_dir() {
-            cf_add_overrides(zip, base, &child_rel, excluded, matched, optional_disabled, opts)?;
+            if filter.should_descend(&child_rel) {
+                cf_add_overrides(zip, base, &child_rel, filter, matched, optional_disabled, opts)?;
+            }
             continue;
         }
         let lower = name.to_lowercase();
-        if matched.contains(&child_rel) || lower == ".ds_store" || lower == "thumbs.db" || lower.ends_with(".pw.toml") {
+        if !filter.includes(&child_rel) || matched.contains(&child_rel) || lower == ".ds_store" || lower == "thumbs.db" || lower.ends_with(".pw.toml") {
             continue;
         }
         if child_rel.ends_with(".disabled") && !optional_disabled {
