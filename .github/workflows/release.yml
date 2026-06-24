@@ -62,7 +62,8 @@ jobs:
             echo "| Platform | Architecture | Download |"
             echo "|----------|-------------|----------|"
             echo "| 🪟 Windows | x64 | [Spectra.Launcher_${VERSION_NUM}_x64-setup.exe](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_x64-setup.exe) |"
-            echo "| 🍎 macOS | Apple Silicon | [Spectra.Launcher_${VERSION_NUM}_aarch64.dmg](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_aarch64.dmg) |"
+            echo "| 🍎 macOS | Apple Silicon (M1+) | [Spectra.Launcher_${VERSION_NUM}_aarch64.dmg](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_aarch64.dmg) |"
+            echo "| 🍎 macOS | Intel (x64) | [Spectra.Launcher_${VERSION_NUM}_x64.dmg](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_x64.dmg) |"
             echo "| 🐧 Linux | x64 (AppImage) | [Spectra.Launcher_${VERSION_NUM}_amd64.AppImage](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_amd64.AppImage) |"
             echo "| 🐧 Linux | x64 (deb) | [Spectra.Launcher_${VERSION_NUM}_amd64.deb](https://github.com/MakotoPD/Spectra-Launcher/releases/download/${VERSION}/Spectra.Launcher_${VERSION_NUM}_amd64.deb) |"
             echo ""
@@ -93,19 +94,21 @@ jobs:
             args: ''
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
+          - platform: 'macos-15-intel'
+            args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-latest'
             args: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev file
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libfuse2 file
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -119,7 +122,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-15-intel' && 'x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2

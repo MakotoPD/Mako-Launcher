@@ -97,6 +97,7 @@ dependencies = [
  "discord-rich-presence",
  "fastnbt",
  "flate2",
+ "libc",
  "log",
  "lyceris",
  "reqwest 0.12.28",

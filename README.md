@@ -83,24 +83,30 @@ By default, data is stored in the OS-specific data directory under `SpectraLaunc
 * **WebView:** Microsoft Edge WebView2 (Windows)
 * **Disk Space:** Varies by installed instances and shared Java runtimes.
 
-## ⚙️ Development
+### How to safely install:
 
-### Prerequisites
-* [Rust](https://www.rust-lang.org/) (v1.77.2+)
-* [Node.js](https://nodejs.org/) (v20+)
-* [pnpm](https://pnpm.io/)
+1. **Download from official sources only**: 
+   - [GitHub Releases](https://github.com/MakotoPD/Spectra-Launcher/releases)
+   - Verify the SHA256 checksum provided in release notes
 
-### Setup
-1. Clone the repository
-2. Install frontend dependencies:
-   ```bash
-   pnpm install
-   ```
-3. Run the development server (starts Nuxt + Tauri):
-   ```bash
-   pnpm run dev
-   ```
-4. Build for production:
-   ```bash
-   pnpm run build
-   ```
+2. **Windows SmartScreen**:
+   - Click **"More info"** → **"Run anyway"** when prompted
+
+3. **Windows Defender** (if blocked):
+   - Open **Windows Security** → **Virus & threat protection**
+   - Click **Protection history**
+   - Find Spectra-Launcher → **Actions** → **Allow**
+
+4. **Optional**: Add an exception for Spectra-Launcher installation directory in your antivirus
+
+We are working on code signing to eliminate these warnings in future releases.
+
+## 🍎 macOS Troubleshooting (App is damaged)
+
+If you see a message saying **"Spectra-Launcher is damaged and can't be opened"**, this is a normal security check for apps not signed with a paid Apple Developer certificate.
+
+To fix this, run the following command in your terminal:
+```bash
+sudo xattr -cr /Applications/Spectra-Launcher.app
+```
+(Make sure the app is in your Applications folder first).

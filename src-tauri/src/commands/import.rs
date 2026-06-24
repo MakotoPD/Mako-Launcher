@@ -472,9 +472,28 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
 
 fn scan_prism() -> Vec<ExternalInstance> {
     let mut out = Vec::new();
-    let Some(data) = dirs::data_dir() else { return out };
-    for app in ["PrismLauncher", "PolyMC", "MultiMC"] {
-        let root = data.join(app).join("instances");
+
+    // Build candidate root directories for all known install layouts.
+    let mut roots: Vec<PathBuf> = Vec::new();
+
+    // Primary: OS data dir (covers Windows AppData, macOS ~/Library/Application Support,
+    // Linux ~/.local/share — all correctly resolved by dirs::data_dir()).
+    if let Some(data) = dirs::data_dir() {
+        for app in ["PrismLauncher", "PolyMC", "MultiMC"] {
+            roots.push(data.join(app).join("instances"));
+        }
+    }
+
+    // Fallback for macOS Homebrew Cask installs which may use ~/.local/share
+    // instead of ~/Library/Application Support.
+    #[cfg(target_os = "macos")]
+    if let Some(home) = dirs::home_dir() {
+        for app in ["PrismLauncher", "PolyMC", "MultiMC"] {
+            roots.push(home.join(".local").join("share").join(app).join("instances"));
+        }
+    }
+
+    for root in roots {
         let Ok(entries) = std::fs::read_dir(&root) else { continue };
         for e in entries.flatten() {
             let dir = e.path();
@@ -492,6 +511,10 @@ fn scan_prism() -> Vec<ExternalInstance> {
             let name = read_cfg_value(&dir.join("instance.cfg"), "name")
                 .unwrap_or_else(|| dir_name(&dir));
             let (mc, loader, lver) = parse_mmc_pack(&pack);
+            // Avoid duplicates if multiple roots resolve to the same directory.
+            if out.iter().any(|x: &ExternalInstance| x.path == dir.to_string_lossy()) {
+                continue;
+            }
             out.push(ExternalInstance {
                 launcher: "prism".into(),
                 name,

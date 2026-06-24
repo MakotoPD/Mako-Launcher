@@ -603,8 +603,17 @@ fn kill_process_tree(pid: u32, force: bool) -> Result<(), String> {
     #[cfg(not(windows))]
     {
         let sig = if force { "-KILL" } else { "-TERM" };
+        // Use the process group (negative PID) so the whole JVM + child tree is
+        // signalled, mirroring `taskkill /T` on Windows. Fallback to bare kill
+        // if getpgid fails (shouldn't happen for a live process).
+        let pgid = unsafe { libc::getpgid(pid as libc::pid_t) };
+        let target = if pgid > 0 {
+            format!("-{pgid}")
+        } else {
+            pid.to_string()
+        };
         std::process::Command::new("kill")
-            .args([sig, &pid.to_string()])
+            .args([sig, &target])
             .status()
             .map(|_| ())
             .map_err(|e| format!("kill: {e}"))
