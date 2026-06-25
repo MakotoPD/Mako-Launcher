@@ -290,7 +290,9 @@
     "downloading": "Aktualizowanie… {progress}%",
     "ready": "Restartowanie…",
     "uptodate": "Masz najnowszą wersję",
-    "error": "Aktualizacja nieudana"
+    "error": "Aktualizacja nieudana",
+    "titlebar": "Aktualizowanie launchera",
+    "titlebarReady": "Aktualizacja v{version}"
   },
   "settings": {
     "title": "Ustawienia",

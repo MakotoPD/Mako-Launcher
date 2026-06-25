@@ -1,3 +1,13 @@
+## Changes (v0.1.2)
+
+### ✨ Features & Improvements
+- **New name**: Mako Launcher is now **Spectra Launcher** — fresh branding to match the spectrum-glow logo.
+- **Update in the titlebar**: the title bar now shows a live download progress bar with a percentage while the launcher updates, plus a one-click "Update" button that appears the moment a new version is available.
+- **Cleaner Settings**: the launcher info and update controls are pinned to the bottom; only the settings content scrolls, and the left sidebar stays in place.
+
+### 🐛 Bug Fixes
+- **Auto-update actually works now**: fixed a bug where clicking "Update" did nothing (the update object was being broken by Vue reactivity). Update failures now show a clear message instead of failing silently.
+
 ## Changes (v0.1.0)
 
 ### ✨ Features & Improvements

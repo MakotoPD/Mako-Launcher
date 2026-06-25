@@ -38,7 +38,7 @@ fn http() -> &'static reqwest::Client {
             headers.insert("x-api-key", v);
         }
         reqwest::Client::builder()
-            .user_agent("MakotoPD/Spectra-Launcher/0.1.1")
+            .user_agent(concat!("MakotoPD/Spectra-Launcher/", env!("CARGO_PKG_VERSION")))
             .default_headers(headers)
             .build()
             .expect("build curseforge client")

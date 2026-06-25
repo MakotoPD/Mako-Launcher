@@ -289,7 +289,9 @@
     "downloading": "Updating… {progress}%",
     "ready": "Restarting…",
     "uptodate": "You're up to date",
-    "error": "Update failed"
+    "error": "Update failed",
+    "titlebar": "Updating launcher",
+    "titlebarReady": "Update v{version}"
   },
   "settings": {
     "title": "Settings",
