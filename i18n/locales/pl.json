@@ -164,6 +164,18 @@
     "playWorld": "Szybka gra",
     "connectServer": "Szybkie połączenie"
   },
+  "worldsPage": {
+    "title": "Światy",
+    "count": "{worlds} światów w {instances} instancjach",
+    "empty": "Nie znaleziono światów w żadnej instancji.",
+    "instanceWorlds": "{n} światów"
+  },
+  "screenshotsPage": {
+    "title": "Zrzuty ekranu",
+    "count": "{shots} zrzutów w {instances} instancjach",
+    "empty": "Nie znaleziono zrzutów w żadnej instancji.",
+    "instanceShots": "{n} zrzutów"
+  },
   "server": {
     "offline": "Offline",
     "players": "{online}/{max} graczy"

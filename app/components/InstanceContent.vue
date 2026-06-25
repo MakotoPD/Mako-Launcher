@@ -40,6 +40,29 @@
       <p class="text-sm text-muted">{{ $t('content.empty') }}</p>
     </div>
 
+    <!-- loading skeletons (grid for screenshots, rows for everything else) -->
+    <div
+      v-else-if="loading"
+      :class="tab === 'screenshots' ? 'grid gap-3' : 'space-y-2'"
+      :style="tab === 'screenshots' ? 'grid-template-columns:repeat(auto-fill,minmax(220px,1fr))' : undefined"
+    >
+      <template v-if="tab === 'screenshots'">
+        <div v-for="n in 6" :key="`ss-sk-${n}`" class="overflow-hidden rounded-xl border border-default bg-white/3">
+          <div class="aspect-video w-full animate-pulse bg-white/5" />
+          <div class="px-2.5 py-1.5"><div class="h-3 w-2/3 animate-pulse rounded bg-white/5" /></div>
+        </div>
+      </template>
+      <template v-else>
+        <div v-for="n in 6" :key="`row-sk-${n}`" class="flex items-center gap-3 rounded-xl border border-default bg-white/3 p-3">
+          <div class="size-11 shrink-0 animate-pulse rounded-lg bg-white/5" />
+          <div class="min-w-0 flex-1 space-y-2">
+            <div class="h-3.5 w-1/3 animate-pulse rounded bg-white/5" />
+            <div class="h-2.5 w-1/2 animate-pulse rounded bg-white/5" />
+          </div>
+        </div>
+      </template>
+    </div>
+
     <!-- screenshots: image grid -->
     <div
       v-else-if="tab === 'screenshots'"

@@ -76,8 +76,20 @@
       </ul>
     </div>
 
+    <!-- loading skeleton -->
+    <div v-else-if="loading" class="overflow-hidden rounded-xl border border-default">
+      <div v-for="n in 8" :key="`mod-sk-${n}`" class="flex items-center gap-3 border-b border-default/50 px-3 py-2.5 last:border-0">
+        <div class="size-9 shrink-0 animate-pulse rounded-lg bg-white/5" />
+        <div class="min-w-0 flex-1 space-y-2">
+          <div class="h-3.5 w-1/3 animate-pulse rounded bg-white/5" />
+          <div class="h-2.5 w-1/2 animate-pulse rounded bg-white/5" />
+        </div>
+        <div class="h-3 w-16 shrink-0 animate-pulse rounded bg-white/5" />
+      </div>
+    </div>
+
     <!-- empty: no mods at all -->
-    <div v-else-if="!loading && !mods.length" class="flex flex-col items-center justify-center gap-3 py-16 text-center">
+    <div v-else-if="!mods.length" class="flex flex-col items-center justify-center gap-3 py-16 text-center">
       <UIcon name="i-lucide-blocks" class="size-10 text-neutral-600" />
       <p class="max-w-sm text-sm text-muted">{{ $t('instance.modsHint') }}</p>
       <UButton icon="i-lucide-package-search" :label="$t('modrinth.browseMods')" @click="openBrowser" />

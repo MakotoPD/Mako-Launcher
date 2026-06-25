@@ -43,8 +43,29 @@
         </button>
       </section>
 
+      <!-- skeleton grid during the first load -->
+      <div
+        v-if="instances.loading && !instances.loaded"
+        class="grid gap-3.5"
+        style="grid-template-columns:repeat(auto-fill,minmax(248px,1fr))"
+      >
+        <div
+          v-for="n in 8"
+          :key="`card-sk-${n}`"
+          class="rounded-2xl border border-default bg-white/3 p-4"
+        >
+          <div class="flex items-center gap-3">
+            <div class="size-13 shrink-0 animate-pulse rounded-[13px] bg-white/5" />
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="h-4 w-3/4 animate-pulse rounded bg-white/5" />
+              <div class="h-3 w-2/5 animate-pulse rounded bg-white/5" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- empty library -->
-      <div v-if="!instances.instances.length" class="flex flex-col items-center justify-center gap-4 py-24 text-center">
+      <div v-else-if="!instances.instances.length" class="flex flex-col items-center justify-center gap-4 py-24 text-center">
         <UIcon name="i-lucide-box" class="size-12 text-neutral-600" />
         <p class="text-sm text-muted">{{ $t('library.empty') }}</p>
         <UButton icon="i-lucide-plus" :label="$t('nav.newInstance')" @click="openCreate()" />

@@ -164,6 +164,18 @@
     "playWorld": "Quick Play",
     "connectServer": "Quick Connect"
   },
+  "worldsPage": {
+    "title": "Worlds",
+    "count": "{worlds} worlds across {instances} instances",
+    "empty": "No worlds found in any instance.",
+    "instanceWorlds": "{n} worlds"
+  },
+  "screenshotsPage": {
+    "title": "Screenshots",
+    "count": "{shots} screenshots across {instances} instances",
+    "empty": "No screenshots found in any instance.",
+    "instanceShots": "{n} screenshots"
+  },
   "server": {
     "offline": "Offline",
     "players": "{online}/{max} players"

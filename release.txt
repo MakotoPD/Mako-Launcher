@@ -1,3 +1,11 @@
+## Changes (v0.2.0)
+
+### ✨ Features & Improvements
+- **Worlds hub**: a new Worlds page lists every world across all your instances, grouped by instance, with one-click Quick Play to jump straight into a world (MC 1.20+).
+- **Screenshots gallery**: a new Screenshots page collects screenshots from all instances, grouped by instance, with a full-screen lightbox (arrow-key navigation, download, reveal in explorer).
+- **Skins page redesign**: saved skins, the add button and the "in use" marker now sit together next to the default skins for a cleaner layout.
+- **Skeleton loading everywhere**: smooth placeholder loaders while content loads — on the home library, the sidebar instance list, instance tabs (mods, resource packs, shaders, screenshots, worlds) and the skins/capes views.
+
 ## Changes (v0.1.2)
 
 ### ✨ Features & Improvements

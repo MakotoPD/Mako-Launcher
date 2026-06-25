@@ -1,55 +1,6 @@
 <template>
   <div class="h-full overflow-y-auto p-6 lg:p-8">
     <div class="mx-auto max-w-6xl space-y-8">
-      <!-- saved skins + add -->
-      <section>
-        <h2 class="mb-3 text-sm font-semibold text-neutral-300">{{ $t('skins.saved') }}</h2>
-        <div class="flex flex-wrap gap-3">
-          <!-- add tile (click or drag & drop) -->
-          <button
-            type="button"
-            class="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-2 text-center transition"
-            :class="dragOver ? 'border-primary-500 bg-primary-500/10' : 'border-default text-neutral-400 hover:border-primary-500/60 hover:text-neutral-200'"
-            @click="pickFile"
-          >
-            <UIcon name="i-lucide-plus" class="size-6" />
-            <span class="text-[11px] leading-tight">{{ $t('skins.addHint') }}</span>
-          </button>
-
-          <!-- saved tiles -->
-          <div
-            v-for="s in saved"
-            :key="s.id"
-            class="group relative w-24 cursor-pointer rounded-xl border p-2 transition"
-            :class="selected.id === s.id ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
-            @click="previewSaved(s)"
-          >
-            <UBadge
-              v-if="s.active"
-              color="success"
-              variant="solid"
-              size="xs"
-              :label="$t('skins.inUse')"
-              class="absolute top-1 left-1 z-1"
-            />
-            <img v-if="savedBust[s.id]" :src="savedBust[s.id]" class="mx-auto h-22 w-full object-contain" :alt="s.name" >
-            <div v-else class="mx-auto h-22 w-full animate-pulse rounded bg-white/5" />
-            <div class="mt-1.5 truncate text-center text-[11px]" :title="s.name">{{ s.name }}</div>
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="solid"
-              size="xs"
-              class="absolute -top-1.5 -right-1.5 opacity-0 transition group-hover:opacity-100"
-              :title="$t('common.remove')"
-              @click.stop="remove(s)"
-            />
-          </div>
-
-          <p v-if="!saved.length" class="self-center text-sm text-muted">{{ $t('skins.noSaved') }}</p>
-        </div>
-      </section>
-
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
         <!-- left: player preview -->
         <section class="flex flex-col items-center gap-3 rounded-2xl border border-default bg-linear-[160deg] from-primary-500/10 to-transparent p-5">
@@ -87,51 +38,123 @@
           <p v-if="!isMicrosoft" class="text-center text-xs text-muted">{{ $t('skins.loginHint') }}</p>
         </section>
 
-        <!-- right: default skins -->
-        <section>
-          <h2 class="mb-3 text-sm font-semibold text-neutral-300">{{ $t('skins.defaults') }}</h2>
-          <div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr))">
-            <div
-              v-for="d in defaults"
-              :key="d.name"
-              class="group cursor-pointer rounded-xl border p-2 transition"
-              :class="selected.kind === 'default' && selected.name === d.name ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
-              @click="previewDefault(d)"
-            >
-              <img v-if="defaultBust[d.name]" :src="defaultBust[d.name]" class="mx-auto h-22 w-full object-contain" :alt="d.name" >
-              <div v-else class="mx-auto h-22 w-full animate-pulse rounded bg-white/5" />
-              <div class="mt-1.5 truncate text-center text-[11px]">{{ d.name }}</div>
+        <!-- right: saved skins + defaults -->
+        <div class="space-y-8">
+          <!-- saved skins + add -->
+          <section>
+            <h2 class="mb-3 text-sm font-semibold text-neutral-300">{{ $t('skins.saved') }}</h2>
+            <div class="flex flex-wrap gap-3">
+              <!-- add tile (click or drag & drop) -->
+              <button
+                type="button"
+                class="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-2 text-center transition"
+                :class="dragOver ? 'border-primary-500 bg-primary-500/10' : 'border-default text-neutral-400 hover:border-primary-500/60 hover:text-neutral-200'"
+                @click="pickFile"
+              >
+                <UIcon name="i-lucide-plus" class="size-6" />
+                <span class="text-[11px] leading-tight">{{ $t('skins.addHint') }}</span>
+              </button>
+
+              <!-- skeleton tiles while the saved library loads -->
+              <template v-if="savedLoading">
+                <div v-for="n in 4" :key="`sk-${n}`" class="w-24 rounded-xl border border-default bg-white/3 p-2">
+                  <div class="mx-auto h-22 w-full animate-pulse rounded bg-white/5" />
+                  <div class="mx-auto mt-1.5 h-3 w-3/4 animate-pulse rounded bg-white/5" />
+                </div>
+              </template>
+
+              <!-- saved tiles -->
+              <template v-else>
+                <div
+                  v-for="s in saved"
+                  :key="s.id"
+                  class="group relative w-24 cursor-pointer rounded-xl border p-2 transition"
+                  :class="selected.id === s.id ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
+                  @click="previewSaved(s)"
+                >
+                  <UBadge
+                    v-if="s.active"
+                    color="success"
+                    variant="solid"
+                    size="xs"
+                    :label="$t('skins.inUse')"
+                    class="absolute top-1 left-1 z-1"
+                  />
+                  <img v-if="savedBust[s.id]" :src="savedBust[s.id]" class="mx-auto h-22 w-full object-contain" :alt="s.name" >
+                  <div v-else class="mx-auto h-22 w-full animate-pulse rounded bg-white/5" />
+                  <div class="mt-1.5 truncate text-center text-[11px]" :title="s.name">{{ s.name }}</div>
+                  <UButton
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="solid"
+                    size="xs"
+                    class="absolute -top-1.5 -right-1.5 opacity-0 transition group-hover:opacity-100"
+                    :title="$t('common.remove')"
+                    @click.stop="remove(s)"
+                  />
+                </div>
+
+                <p v-if="!saved.length" class="self-center text-sm text-muted">{{ $t('skins.noSaved') }}</p>
+              </template>
             </div>
-          </div>
-        </section>
+          </section>
+
+          <!-- default skins -->
+          <section>
+            <h2 class="mb-3 text-sm font-semibold text-neutral-300">{{ $t('skins.defaults') }}</h2>
+            <div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr))">
+              <div
+                v-for="d in defaults"
+                :key="d.name"
+                class="group cursor-pointer rounded-xl border p-2 transition"
+                :class="selected.kind === 'default' && selected.name === d.name ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
+                @click="previewDefault(d)"
+              >
+                <img v-if="defaultBust[d.name]" :src="defaultBust[d.name]" class="mx-auto h-22 w-full object-contain" :alt="d.name" >
+                <div v-else class="mx-auto h-22 w-full animate-pulse rounded bg-white/5" />
+                <div class="mt-1.5 truncate text-center text-[11px]">{{ d.name }}</div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
 
       <!-- capes (Microsoft accounts) -->
-      <section v-if="isMicrosoft && capes.length">
+      <section v-if="isMicrosoft && (capesLoading || capes.length)">
         <h2 class="mb-3 text-sm font-semibold text-neutral-300">{{ $t('skins.capes') }}</h2>
         <div class="flex flex-wrap gap-3">
-          <button
-            type="button"
-            class="flex w-24 flex-col items-center gap-2 rounded-xl border p-2 transition"
-            :class="!activeCapeId ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
-            @click="chooseCape(null)"
-          >
-            <div class="flex h-16 w-10 items-center justify-center rounded bg-white/5 text-neutral-500">
-              <UIcon name="i-lucide-ban" class="size-5" />
+          <!-- skeleton tiles while capes load -->
+          <template v-if="capesLoading">
+            <div v-for="n in 3" :key="`cape-sk-${n}`" class="flex w-24 flex-col items-center gap-2 rounded-xl border border-default bg-white/3 p-2">
+              <div class="h-16 w-10 animate-pulse rounded bg-white/5" />
+              <div class="h-3 w-3/5 animate-pulse rounded bg-white/5" />
             </div>
-            <span class="text-[11px]">{{ $t('skins.noCape') }}</span>
-          </button>
-          <button
-            v-for="c in capes"
-            :key="c.id"
-            type="button"
-            class="flex w-24 flex-col items-center gap-2 rounded-xl border p-2 transition"
-            :class="c.active ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
-            @click="chooseCape(c)"
-          >
-            <div class="h-16 w-10 rounded" :style="capeStyle(c.url)" />
-            <span class="truncate text-[11px]" :title="c.alias">{{ c.alias || 'Cape' }}</span>
-          </button>
+          </template>
+
+          <template v-else>
+            <button
+              type="button"
+              class="flex w-24 flex-col items-center gap-2 rounded-xl border p-2 transition"
+              :class="!activeCapeId ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
+              @click="chooseCape(null)"
+            >
+              <div class="flex h-16 w-10 items-center justify-center rounded bg-white/5 text-neutral-500">
+                <UIcon name="i-lucide-ban" class="size-5" />
+              </div>
+              <span class="text-[11px]">{{ $t('skins.noCape') }}</span>
+            </button>
+            <button
+              v-for="c in capes"
+              :key="c.id"
+              type="button"
+              class="flex w-24 flex-col items-center gap-2 rounded-xl border p-2 transition"
+              :class="c.active ? 'border-primary-500 bg-primary-500/10' : 'border-default bg-white/3 hover:border-primary-500/40'"
+              @click="chooseCape(c)"
+            >
+              <div class="h-16 w-10 rounded" :style="capeStyle(c.url)" />
+              <span class="truncate text-[11px]" :title="c.alias">{{ c.alias || 'Cape' }}</span>
+            </button>
+          </template>
         </div>
       </section>
     </div>
@@ -155,12 +178,15 @@ const nickname = computed(() => account.activeAccount?.username ?? '—')
 // --- capes (Microsoft accounts) ---
 interface Cape { id: string; url: string; alias: string; active: boolean }
 const capes = ref<Cape[]>([])
+const capesLoading = ref(false)
 const activeCapeId = computed(() => capes.value.find(c => c.active)?.id ?? null)
 
 async function loadCapes() {
   if (!isMicrosoft.value) { capes.value = []; return }
+  capesLoading.value = true
   try { capes.value = await invoke<Cape[]>('get_player_capes') }
   catch { capes.value = [] }
+  finally { capesLoading.value = false }
 }
 async function chooseCape(c: Cape | null) {
   try {
@@ -191,6 +217,7 @@ const defaults: DefaultSkin[] = [
 
 const bust = useSkinBust()
 const saved = ref<SavedSkin[]>([])
+const savedLoading = ref(true) // skeleton shown until the first load completes
 const savedRaw = reactive<Record<string, string>>({}) // saved id -> raw skin data URL
 const savedBust = reactive<Record<string, string>>({}) // saved id -> bust render
 const defaultRaw = reactive<Record<string, string>>({}) // default name -> raw skin data URL
@@ -315,7 +342,11 @@ async function applySelected() {
 }
 
 async function loadSaved() {
-  saved.value = await invoke<SavedSkin[]>('list_skins')
+  try {
+    saved.value = await invoke<SavedSkin[]>('list_skins')
+  } finally {
+    savedLoading.value = false
+  }
   // Render a bust thumbnail for each saved skin.
   for (const s of saved.value) {
     if (savedBust[s.id]) continue

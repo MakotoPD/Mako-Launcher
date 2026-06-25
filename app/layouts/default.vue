@@ -24,6 +24,16 @@
         <div class="flex flex-1 min-h-0 flex-col gap-2 py-4 mt-4 border-t border-gray-800">
           <!-- instances list -->
           <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
+            <!-- skeleton rows during the first load -->
+            <template v-if="instances.loading && !instances.loaded">
+              <div v-for="n in 6" :key="`inst-sk-${n}`" class="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5">
+                <div class="size-7 shrink-0 animate-pulse rounded-md bg-white/5" />
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <div class="h-3 w-3/4 animate-pulse rounded bg-white/5" />
+                  <div class="h-2 w-2/5 animate-pulse rounded bg-white/5" />
+                </div>
+              </div>
+            </template>
             <SidebarInstanceItem
               v-for="instance in instances.instances"
               :key="instance.id"
